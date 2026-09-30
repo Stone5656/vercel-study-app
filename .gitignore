@@ -17,6 +17,10 @@ pnpm-debug.log*
 # Coverage
 coverage/
 
+# Test artifacts
+playwright-report/
+test-results/
+
 # Vercel
 .vercel/
 
