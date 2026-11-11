@@ -33,8 +33,10 @@ E2E は `pnpm exec playwright test --output=/tmp/todo-v2-e2e-final` で実行。
 
 ## Preview（マージ前）
 
-- URL / deployment status: 未確認（ブランチ Push 前）
-- V1/V2 routes、CRUD、priority、filters: 未実施
+- URL: https://vercel-study-eagdbjfwu-stone5656s-projects.vercel.app（GitHub deployment status success、2026-11-11 06:51 UTC）
+- 別 URL: https://vercel-study-103ace87q-yjs-projects-e19df116.vercel.app（deployment status success）
+- 匿名アクセス確認: `/`, `/api/db-check`, `/db-sample`, `/todo`, `/api/v1/todos`, `/todo-v2`, `/api/v2/todos` は全て HTTP 302（Vercel Preview Protection）。認証後の結果は未確認。
+- V1/V2 routes、CRUD、priority、filters: 認証済みブラウザでの操作待ち
 
 ## Production（マージ前）
 
