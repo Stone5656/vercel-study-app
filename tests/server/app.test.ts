@@ -23,4 +23,15 @@ describe('GET /', () => {
     assert.equal(script.status, 200);
     assert.match(script.text, /class TodoApi/);
   });
+
+  it('GET /todo-v2 renders V2 and serves its separate module', async () => {
+    const page = await request(app).get('/todo-v2');
+    const script = await request(app).get('/todo/todo-v2.js');
+
+    assert.equal(page.status, 200);
+    assert.match(page.text, /TODO V2/);
+    assert.match(page.text, /todo-v2-filter-priority/);
+    assert.equal(script.status, 200);
+    assert.match(script.text, /class TodoApiV2/);
+  });
 });

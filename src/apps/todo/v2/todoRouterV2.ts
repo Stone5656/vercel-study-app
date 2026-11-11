@@ -8,6 +8,9 @@ export function createTodoRouterV2(model: TodoModelV2 = todoModelV2) {
   const router = express.Router();
   const controller = createTodoControllerV2(model);
 
+  router.get('/todo-v2', (_req, res) => {
+    res.render('todo/v2', { title: 'TODO V2' });
+  });
   router.get('/api/v2/todos', controller.list);
   router.post('/api/v2/todos', controller.create);
   router.patch('/api/v2/todos/:id', controller.update);
