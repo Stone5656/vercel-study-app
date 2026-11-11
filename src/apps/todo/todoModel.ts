@@ -48,3 +48,30 @@ export async function createTodo(title: string): Promise<Todo> {
 
   return toTodo(todo);
 }
+
+export async function setTodoCompletion(
+  id: number,
+  isCompleted: boolean,
+): Promise<Todo | null> {
+  const result = await requirePool().query<TodoRow>(
+    `UPDATE todo_tasks
+     SET is_completed = $2
+     WHERE id = $1
+     RETURNING id, title, is_completed, created_at;`,
+    [id, isCompleted],
+  );
+
+  const todo = result.rows[0];
+  return todo ? toTodo(todo) : null;
+}
+
+export async function deleteTodo(id: number): Promise<boolean> {
+  const result = await requirePool().query<{ id: number }>(
+    `DELETE FROM todo_tasks
+     WHERE id = $1
+     RETURNING id;`,
+    [id],
+  );
+
+  return result.rows.length > 0;
+}

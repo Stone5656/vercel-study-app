@@ -37,6 +37,24 @@ function createFakeModel(): TodoReadWriteModel {
       todos.push(todo);
       return todo;
     },
+    async setTodoCompletion(id, isCompleted) {
+      const todo = todos.find((candidate) => candidate.id === id);
+      if (!todo) {
+        return null;
+      }
+
+      todo.isCompleted = isCompleted;
+      return { ...todo };
+    },
+    async deleteTodo(id) {
+      const index = todos.findIndex((candidate) => candidate.id === id);
+      if (index < 0) {
+        return false;
+      }
+
+      todos.splice(index, 1);
+      return true;
+    },
   };
 }
 
@@ -112,11 +130,84 @@ describe('TODO GET・POST API', () => {
           code: 'ECONNREFUSED',
         });
       },
+      async setTodoCompletion() {
+        throw Object.assign(new Error('hidden database details'), {
+          code: 'ECONNREFUSED',
+        });
+      },
+      async deleteTodo() {
+        throw Object.assign(new Error('hidden database details'), {
+          code: 'ECONNREFUSED',
+        });
+      },
     };
 
     const response = await request(createTestApp(model)).get('/api/v1/todos');
     assert.equal(response.status, 503);
     assert.equal(response.body.code, 'DB_UNAVAILABLE');
     assert.equal(JSON.stringify(response.body).includes('hidden'), false);
+  });
+
+  it('REQ-03: 完了状態を更新して更新後データを返す', async () => {
+    const app = createTestApp();
+    const created = await request(app)
+      .post('/api/v1/todos')
+      .send({ title: '完了する' });
+    const response = await request(app)
+      .patch(`/api/v1/todos/${created.body.data.id}`)
+      .send({ isCompleted: true });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.data.isCompleted, true);
+  });
+
+  it('REQ-03: 不正なIDと存在しないIDを区別する', async () => {
+    const app = createTestApp();
+    const invalid = await request(app)
+      .patch('/api/v1/todos/0')
+      .send({ isCompleted: true });
+    const missing = await request(app)
+      .patch('/api/v1/todos/999')
+      .send({ isCompleted: true });
+
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.code, 'BAD_REQUEST');
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.code, 'NOT_FOUND');
+  });
+
+  it('REQ-03: isCompletedの欠落・型違いを400で返す', async () => {
+    const app = createTestApp();
+    const missing = await request(app).patch('/api/v1/todos/1').send({});
+    const invalid = await request(app)
+      .patch('/api/v1/todos/1')
+      .send({ isCompleted: 'true' });
+
+    assert.equal(missing.status, 400);
+    assert.equal(invalid.status, 400);
+  });
+
+  it('REQ-04: 自分の作成データを204本文なしで削除する', async () => {
+    const app = createTestApp();
+    const created = await request(app)
+      .post('/api/v1/todos')
+      .send({ title: '自分のテスト項目' });
+    const response = await request(app).delete(
+      `/api/v1/todos/${created.body.data.id}`,
+    );
+
+    assert.equal(response.status, 204);
+    assert.equal(response.text, '');
+  });
+
+  it('REQ-04: 不正なIDと存在しないIDを区別する', async () => {
+    const app = createTestApp();
+    const invalid = await request(app).delete('/api/v1/todos/1.5');
+    const missing = await request(app).delete('/api/v1/todos/999');
+
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.code, 'BAD_REQUEST');
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.code, 'NOT_FOUND');
   });
 });

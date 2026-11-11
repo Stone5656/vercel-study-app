@@ -35,6 +35,8 @@ export function createTodoRouter(model: TodoReadWriteModel = todoModel) {
 
   router.get('/api/v1/todos', controller.list);
   router.post('/api/v1/todos', controller.create);
+  router.patch('/api/v1/todos/:id', controller.update);
+  router.delete('/api/v1/todos/:id', controller.remove);
 
   return router;
 }
