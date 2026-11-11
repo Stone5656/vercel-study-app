@@ -4,6 +4,10 @@ import express, { type Request, type Response } from 'express';
 
 import path from 'node:path';
 import { requirePool } from './db.js';
+import {
+  createTodoRouter,
+  todoJsonErrorHandler,
+} from './apps/todo/todoRouter.js';
 
 type Product = {
   id: number;
@@ -18,6 +22,10 @@ app.use(
     extended: true,
   }),
 );
+app.use(express.json());
+
+app.use(createTodoRouter());
+app.use(todoJsonErrorHandler);
 
 app.use(express.static(path.join(process.cwd(), 'public')));
 

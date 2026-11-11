@@ -18,3 +18,36 @@ button {
   padding: 10px 20px;
   cursor: pointer;
 }
+.todo-app {
+  text-align: left;
+}
+.todo-form-row,
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.todo-form-row input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+}
+#todo-list {
+  padding: 0;
+  list-style: none;
+}
+.todo-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #ddd;
+}
+.todo-title {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.todo-title.is-completed {
+  color: #666;
+  text-decoration: line-through;
+}
+#todo-error {
+  color: #a00000;
+}
