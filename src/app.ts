@@ -4,6 +4,10 @@ import express, { type Request, type Response } from 'express';
 
 import path from 'node:path';
 import { requirePool } from './db.js';
+import {
+  createTodoRouter,
+  todoJsonErrorHandler,
+} from './apps/todo/todoRouter.js';
 
 type Product = {
   id: number;
@@ -18,6 +22,7 @@ app.use(
     extended: true,
   }),
 );
+app.use(express.json());
 
 app.use(express.static(path.join(process.cwd(), 'public')));
 
@@ -55,6 +60,9 @@ app.get('/db-sample', async (_req: Request, res: Response): Promise<void> => {
     res.status(503).send('データベースを利用できません。');
   }
 });
+
+app.use(createTodoRouter());
+app.use(todoJsonErrorHandler);
 
 export { app };
 export default app;
