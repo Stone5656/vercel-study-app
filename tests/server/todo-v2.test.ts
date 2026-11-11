@@ -8,17 +8,30 @@ import { todoJsonErrorHandler } from '../../src/apps/todo/todoRouter.js';
 import { createTodoRouterV2 } from '../../src/apps/todo/v2/todoRouterV2.js';
 import type {
   TodoModelV2,
+  TodoFiltersV2,
   TodoPriority,
   TodoV2,
 } from '../../src/apps/todo/v2/todoModelV2.js';
+import { buildTodoListQueryV2 } from '../../src/apps/todo/v2/todoModelV2.js';
 
 function createFakeModel(): TodoModelV2 {
   const todos = new Map<number, TodoV2>();
   let nextId = 1;
 
   return {
-    async listTodosV2() {
-      return [...todos.values()].sort((left, right) => left.id - right.id);
+    async listTodosV2(filters: TodoFiltersV2) {
+      return [...todos.values()]
+        .filter((todo) =>
+          filters.completed === undefined
+            ? true
+            : todo.isCompleted === filters.completed,
+        )
+        .filter((todo) =>
+          filters.priority === undefined
+            ? true
+            : todo.priority === filters.priority,
+        )
+        .sort((left, right) => left.id - right.id);
     },
     async createTodoV2(title, priority) {
       const todo: TodoV2 = {
@@ -53,10 +66,66 @@ function createTestApp(model: TodoModelV2 = createFakeModel()) {
 }
 
 describe('TODO V2 CRUD API', () => {
+  it('絞り込みSQLは条件と値を分けたplaceholderを使う', () => {
+    const query = buildTodoListQueryV2({
+      completed: false,
+      priority: 'high',
+    });
+    assert.match(query.text, /is_completed = \$1 AND priority = \$2/);
+    assert.deepEqual(query.values, [false, 'high']);
+    assert.match(query.text, /ORDER BY id/);
+  });
+
   it('一覧は空配列を返す', async () => {
     const response = await request(createTestApp()).get('/api/v2/todos');
     assert.equal(response.status, 200);
     assert.deepEqual(response.body, { status: 'success', data: [] });
+  });
+
+  it('completed / priority を単独またはAND条件で絞り込む', async () => {
+    const app = createTestApp();
+    await request(app)
+      .post('/api/v2/todos')
+      .send({ title: 'high open', priority: 'high' });
+    const second = await request(app)
+      .post('/api/v2/todos')
+      .send({ title: 'high completed', priority: 'high' });
+    await request(app)
+      .patch(`/api/v2/todos/${second.body.data.id}`)
+      .send({ isCompleted: true });
+    await request(app)
+      .post('/api/v2/todos')
+      .send({ title: 'low open', priority: 'low' });
+
+    const all = await request(app).get('/api/v2/todos');
+    const open = await request(app).get('/api/v2/todos?completed=false');
+    const high = await request(app).get('/api/v2/todos?priority=high');
+    const combined = await request(app).get(
+      '/api/v2/todos?completed=true&priority=high',
+    );
+
+    assert.equal(all.body.data.length, 3);
+    assert.deepEqual(
+      open.body.data.map((todo: TodoV2) => todo.title),
+      ['high open', 'low open'],
+    );
+    assert.equal(high.body.data.length, 2);
+    assert.deepEqual(
+      combined.body.data.map((todo: TodoV2) => todo.title),
+      ['high completed'],
+    );
+  });
+
+  it('completed不正値は400、priority不正値は422', async () => {
+    const app = createTestApp();
+    const badCompleted = await request(app).get('/api/v2/todos?completed=yes');
+    const repeatedCompleted = await request(app).get(
+      '/api/v2/todos?completed=true&completed=false',
+    );
+    const badPriority = await request(app).get('/api/v2/todos?priority=urgent');
+    assert.equal(badCompleted.status, 400);
+    assert.equal(repeatedCompleted.status, 400);
+    assert.equal(badPriority.status, 422);
   });
 
   it('priority省略時はnormalで登録する', async () => {

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 
 import type {
   TodoModelV2,
+  TodoFiltersV2,
   TodoPriority,
   TodoV2Changes,
 } from './todoModelV2.js';
@@ -70,11 +71,47 @@ function isPriority(value: unknown): value is TodoPriority {
 
 export function createTodoControllerV2(model: TodoModelV2) {
   return {
-    async list(_req: Request, res: Response): Promise<void> {
+    async list(req: Request, res: Response): Promise<void> {
+      const filters: TodoFiltersV2 = {};
+      const completed = req.query.completed;
+      if (completed !== undefined) {
+        if (
+          typeof completed !== 'string' ||
+          !['true', 'false'].includes(completed)
+        ) {
+          sendError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'completed は true または false で指定してください',
+          );
+          return;
+        }
+        filters.completed = completed === 'true';
+      }
+
+      const priority = req.query.priority;
+      if (priority !== undefined) {
+        if (typeof priority !== 'string') {
+          sendError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'priority は文字列で指定してください',
+          );
+          return;
+        }
+        if (!isPriority(priority)) {
+          sendError(res, 422, 'VALIDATION_ERROR', 'priority の値が不正です');
+          return;
+        }
+        filters.priority = priority;
+      }
+
       try {
         res.status(200).json({
           status: 'success',
-          data: await model.listTodosV2(),
+          data: await model.listTodosV2(filters),
         });
       } catch (error) {
         sendServerError(res, error);

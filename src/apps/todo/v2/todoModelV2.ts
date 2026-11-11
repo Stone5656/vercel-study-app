@@ -15,8 +15,13 @@ export type TodoV2Changes = {
   priority?: TodoPriority;
 };
 
+export type TodoFiltersV2 = {
+  completed?: boolean;
+  priority?: TodoPriority;
+};
+
 export type TodoModelV2 = {
-  listTodosV2(): Promise<TodoV2[]>;
+  listTodosV2(filters: TodoFiltersV2): Promise<TodoV2[]>;
   createTodoV2(title: string, priority: TodoPriority): Promise<TodoV2>;
   updateTodoV2(id: number, changes: TodoV2Changes): Promise<TodoV2 | null>;
   deleteTodoV2(id: number): Promise<boolean>;
@@ -40,12 +45,36 @@ function toTodoV2(row: TodoRowV2): TodoV2 {
   };
 }
 
-export async function listTodosV2(): Promise<TodoV2[]> {
-  const result = await requirePool().query<TodoRowV2>(
-    `SELECT id, title, is_completed, priority, created_at
+export function buildTodoListQueryV2(filters: TodoFiltersV2): {
+  text: string;
+  values: (boolean | TodoPriority)[];
+} {
+  const conditions: string[] = [];
+  const values: (boolean | TodoPriority)[] = [];
+
+  if (filters.completed !== undefined) {
+    values.push(filters.completed);
+    conditions.push(`is_completed = $${values.length}`);
+  }
+  if (filters.priority !== undefined) {
+    values.push(filters.priority);
+    conditions.push(`priority = $${values.length}`);
+  }
+
+  return {
+    text: `SELECT id, title, is_completed, priority, created_at
      FROM v2_todo_tasks
+     ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
      ORDER BY id;`,
-  );
+    values,
+  };
+}
+
+export async function listTodosV2(
+  filters: TodoFiltersV2 = {},
+): Promise<TodoV2[]> {
+  const query = buildTodoListQueryV2(filters);
+  const result = await requirePool().query<TodoRowV2>(query.text, query.values);
 
   return result.rows.map(toTodoV2);
 }
