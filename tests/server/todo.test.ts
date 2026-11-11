@@ -148,6 +148,35 @@ describe('TODO GET・POST API', () => {
     assert.equal(JSON.stringify(response.body).includes('hidden'), false);
   });
 
+  it('DATABASE_URL未設定をDB_UNAVAILABLEとして返す', async () => {
+    const model: TodoReadWriteModel = {
+      async listTodos() {
+        throw new Error(
+          'DATABASE_URL is not set. Configure it before querying.',
+        );
+      },
+      async createTodo() {
+        throw new Error(
+          'DATABASE_URL is not set. Configure it before querying.',
+        );
+      },
+      async setTodoCompletion() {
+        throw new Error(
+          'DATABASE_URL is not set. Configure it before querying.',
+        );
+      },
+      async deleteTodo() {
+        throw new Error(
+          'DATABASE_URL is not set. Configure it before querying.',
+        );
+      },
+    };
+
+    const response = await request(createTestApp(model)).get('/api/v1/todos');
+    assert.equal(response.status, 503);
+    assert.equal(response.body.code, 'DB_UNAVAILABLE');
+  });
+
   it('REQ-03: 完了状態を更新して更新後データを返す', async () => {
     const app = createTestApp();
     const created = await request(app)

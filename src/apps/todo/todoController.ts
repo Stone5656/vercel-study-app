@@ -31,6 +31,13 @@ function sendError(
 }
 
 function isDatabaseUnavailable(error: unknown): boolean {
+  if (
+    error instanceof Error &&
+    error.message.startsWith('DATABASE_URL is not set.')
+  ) {
+    return true;
+  }
+
   if (!error || typeof error !== 'object' || !('code' in error)) {
     return false;
   }
