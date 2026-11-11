@@ -1,5 +1,8 @@
 # TODO アプリ V2 テスト結果
 
+- Branch: `feature/todo-v2`
+- Pull Request: https://github.com/Stone5656/vercel-study-app/pull/4（open、マージ前）
+
 ## 実装内容
 
 - V2専用 `v2_todo_tasks` / `/api/v2/todos` / `TodoApiV2` / `/todo-v2` を追加。
