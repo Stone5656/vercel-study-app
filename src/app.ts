@@ -8,6 +8,7 @@ import {
   createTodoRouter,
   todoJsonErrorHandler,
 } from './apps/todo/todoRouter.js';
+import { createTodoRouterV2 } from './apps/todo/v2/todoRouterV2.js';
 
 type Product = {
   id: number;
@@ -25,6 +26,7 @@ app.use(
 app.use(express.json());
 
 app.use(createTodoRouter());
+app.use(createTodoRouterV2());
 app.use(todoJsonErrorHandler);
 
 app.use(express.static(path.join(process.cwd(), 'public')));

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body>
+    <main class="todo-app">
+      <h1><%= title %></h1>
+      <form id="todo-v2-form">
+        <label for="todo-v2-title">新しいTODO</label>
+        <div class="todo-form-row">
+          <input id="todo-v2-title" name="title" type="text" maxlength="100" required>
+          <label for="todo-v2-priority">優先度</label>
+          <select id="todo-v2-priority" name="priority">
+            <option value="low">低</option>
+            <option value="normal" selected>通常</option>
+            <option value="high">高</option>
+          </select>
+          <button id="todo-v2-submit" type="submit">登録</button>
+        </div>
+      </form>
+
+      <section class="todo-filters" aria-label="TODOの絞り込み">
+        <label for="todo-v2-filter-completed">完了状態</label>
+        <select id="todo-v2-filter-completed">
+          <option value="">すべて</option>
+          <option value="false">未完了</option>
+          <option value="true">完了</option>
+        </select>
+        <label for="todo-v2-filter-priority">優先度</label>
+        <select id="todo-v2-filter-priority">
+          <option value="">すべて</option>
+          <option value="low">低</option>
+          <option value="normal">通常</option>
+          <option value="high">高</option>
+        </select>
+        <button id="todo-v2-filter-reset" type="button">条件をリセット</button>
+      </section>
+
+      <p id="todo-v2-status" role="status" aria-live="polite">読み込み中…</p>
+      <p id="todo-v2-error" role="alert" aria-live="assertive" hidden></p>
+      <ul id="todo-v2-list" aria-label="TODO V2一覧"></ul>
+      <p><a href="/todo">V1のTODO画面へ</a> | <a href="/">トップページへ戻る</a></p>
+    </main>
+    <script type="module" src="/todo/todo-v2.js"></script>
+  </body>
+</html>
