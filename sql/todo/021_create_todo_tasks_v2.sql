@@ -22,6 +22,20 @@ WHERE table_schema = 'public'
   AND table_name = 'v2_todo_tasks'
 ORDER BY ordinal_position;
 
+-- 主キーと CHECK 制約を確認する
+SELECT
+  tc.constraint_type,
+  tc.constraint_name,
+  cc.check_clause
+FROM information_schema.table_constraints AS tc
+LEFT JOIN information_schema.check_constraints AS cc
+  ON cc.constraint_catalog = tc.constraint_catalog
+  AND cc.constraint_schema = tc.constraint_schema
+  AND cc.constraint_name = tc.constraint_name
+WHERE tc.table_schema = 'public'
+  AND tc.table_name = 'v2_todo_tasks'
+ORDER BY tc.constraint_type, tc.constraint_name;
+
 -- 既存行は削除せず、内容を確認する
 SELECT id, title, priority
 FROM v2_todo_tasks
