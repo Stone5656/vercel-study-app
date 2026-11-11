@@ -24,6 +24,9 @@ app.use(
 );
 app.use(express.json());
 
+app.use(createTodoRouter());
+app.use(todoJsonErrorHandler);
+
 app.use(express.static(path.join(process.cwd(), 'public')));
 
 app.set('view engine', 'ejs');
@@ -60,9 +63,6 @@ app.get('/db-sample', async (_req: Request, res: Response): Promise<void> => {
     res.status(503).send('データベースを利用できません。');
   }
 });
-
-app.use(createTodoRouter());
-app.use(todoJsonErrorHandler);
 
 export { app };
 export default app;

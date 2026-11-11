@@ -33,6 +33,9 @@ export function createTodoRouter(model: TodoReadWriteModel = todoModel) {
   const router = express.Router();
   const controller = createTodoController(model);
 
+  router.get('/todo', (_req, res) => {
+    res.render('todo/index', { title: 'TODO一覧' });
+  });
   router.get('/api/v1/todos', controller.list);
   router.post('/api/v1/todos', controller.create);
   router.patch('/api/v1/todos/:id', controller.update);

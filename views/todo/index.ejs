@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body>
+    <main class="todo-app">
+      <h1><%= title %></h1>
+      <form id="todo-form">
+        <label for="todo-title">新しいTODO</label>
+        <div class="todo-form-row">
+          <input id="todo-title" name="title" type="text" maxlength="100" required>
+          <button id="todo-submit" type="submit">登録</button>
+        </div>
+      </form>
+      <p id="todo-status" role="status" aria-live="polite">読み込み中…</p>
+      <p id="todo-error" role="alert" aria-live="assertive" hidden></p>
+      <ul id="todo-list" aria-label="TODO一覧"></ul>
+      <p><a href="/">トップページへ戻る</a></p>
+    </main>
+    <script type="module" src="/todo/todo.js"></script>
+  </body>
+</html>
