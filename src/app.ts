@@ -3,7 +3,13 @@
 import express, { type Request, type Response } from 'express';
 
 import path from 'node:path';
-import { pool } from './db.js';
+import { requirePool } from './db.js';
+
+type Product = {
+  id: number;
+  name: string;
+  price: number;
+};
 
 const app = express();
 
@@ -28,13 +34,27 @@ app.get(
   '/api/db-check',
   async (_req: Request, res: Response): Promise<void> => {
     try {
-      await pool.query('SELECT 1 AS connection_test');
+      await requirePool().query('SELECT 1 AS connection_test');
       res.status(200).json({ status: 'ok', database: 'connected' });
     } catch {
       res.status(503).json({ status: 'error', database: 'unavailable' });
     }
   },
 );
+
+app.get('/db-sample', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await requirePool().query<Product>(
+      'SELECT id, name, price FROM products ORDER BY id;',
+    );
+    res.render('db-sample', {
+      title: '商品一覧',
+      products: result.rows,
+    });
+  } catch {
+    res.status(503).send('データベースを利用できません。');
+  }
+});
 
 export { app };
 export default app;

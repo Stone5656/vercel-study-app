@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body>
+    <main>
+      <h1><%= title %></h1>
+      <% if (products.length === 0) { %>
+        <p>商品は登録されていません。</p>
+      <% } else { %>
+        <ul>
+          <% products.forEach((product) => { %>
+            <li><%= product.name %>：<%= product.price %>円</li>
+          <% }) %>
+        </ul>
+      <% } %>
+      <p><a href="/">トップページへ戻る</a></p>
+    </main>
+  </body>
+</html>
