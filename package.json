@@ -25,14 +25,17 @@
   },
   "homepage": "https://github.com/Stone5656/vercel-study-app#readme",
   "dependencies": {
+    "dotenv": "^18.0.10",
     "ejs": "^6.0.1",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "1.63.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "7.2.1",
     "eslint": "^10.11.0",
     "lefthook": "^2.1.14",
