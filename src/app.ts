@@ -3,6 +3,7 @@
 import express, { type Request, type Response } from 'express';
 
 import path from 'node:path';
+import { pool } from './db.js';
 
 const app = express();
 
@@ -22,6 +23,18 @@ app.get('/', (_req: Request, res: Response): void => {
     title: 'Home',
   });
 });
+
+app.get(
+  '/api/db-check',
+  async (_req: Request, res: Response): Promise<void> => {
+    try {
+      await pool.query('SELECT 1 AS connection_test');
+      res.status(200).json({ status: 'ok', database: 'connected' });
+    } catch {
+      res.status(503).json({ status: 'error', database: 'unavailable' });
+    }
+  },
+);
 
 export { app };
 export default app;
