@@ -26,13 +26,14 @@
 
 ## Preview（マージ前）
 
-- URL: 未確認（このブランチの Vercel Preview は未取得）
-- `/`, `/api/db-check`, `/db-sample`, `/todo`, `/api/v1/todos`: 未実施
-- Preview CRUD: 未実施
+- URL: https://vercel-study-ashf7lvih-stone5656s-projects.vercel.app（GitHub deployment status success、2026-11-11 06:17 UTC）
+- 別 Preview URL: https://vercel-study-9jhcaflyr-yjs-projects-e19df116.vercel.app（deployment status success）
+- `/`, `/api/db-check`, `/db-sample`, `/todo`, `/api/v1/todos`: 匿名 HTTP 確認は全て302（Vercel Preview Protection）。認証後のアプリ応答は未確認。
+- Preview CRUD: 未実施。認証済みブラウザでの確認待ち。
 
 ## Production（マージ前）
 
-2026-11-11 UTC に `https://vercel-study-app-psi.vercel.app` を確認。
+2026-11-11 06:15 UTC に `https://vercel-study-app-psi.vercel.app` を確認。
 
 | URL             | 結果                                                    |
 | --------------- | ------------------------------------------------------- |
