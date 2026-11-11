@@ -13,7 +13,7 @@
 ## デプロイ
 
 - Vercel Production: https://vercel-study-app-psi.vercel.app
-- Vercel Preview: 未確認（商品一覧ブランチの Preview 作成前）
+- Vercel Preview: https://vercel-study-l2w9p7pc5-stone5656s-projects.vercel.app（GitHub deployment status は success。Preview Protection により直接アクセスは HTTP 302、各ページの結果は未確認）
 
 ## 動作確認
 
@@ -32,7 +32,7 @@
 
 ## エラーと対応
 
-- Production の `/` と `/api/db-check` が HTTP 500 `FUNCTION_INVOCATION_FAILED`。原因は Vercel の Function Logs を確認できておらず未確定。`DATABASE_URL` 未設定時に DB モジュールの初期化で Express アプリ全体がロード失敗する可能性を切り分け候補とし、DB 接続設定の検証を DB 利用ルート内に移してトップページは表示可能にする変更を実装。Vercel Function Logs は未確認のため、Production の根本原因確定と修正反映は未完了。
+- Production の `/` と `/api/db-check` が HTTP 500 `FUNCTION_INVOCATION_FAILED`。原因は Vercel の Function Logs を確認できておらず未確定。`DATABASE_URL` 未設定時に DB モジュールの初期化で Express アプリ全体がロード失敗する可能性を切り分け候補とし、DB 接続設定の検証を DB 利用ルート内に移してトップページは表示可能にする変更を実装。Vercel Function Logs は未確認のため、Production の根本原因確定と修正反映は未完了。Preview も Vercel Protection により HTTP 302 となり、実アプリの確認は未完了。
 
 ## 確認問題
 
