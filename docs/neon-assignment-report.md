@@ -4,7 +4,7 @@
 
 - Repository: https://github.com/Stone5656/vercel-study-app
 - 接続確認 PR #1: https://github.com/Stone5656/vercel-study-app/pull/1（2026-11-11 に main へマージ済み）
-- 商品一覧 PR #2: 作成前
+- 商品一覧 PR #2: main へマージ済み
 - 使用ブランチ: `feature/neon-connection`、`feature/product-list`
 - 主なコミット:
   - `772d462` Neonへのデータベース接続処理を追加
@@ -12,17 +12,18 @@
 
 ## デプロイ
 
-- Vercel Production: https://vercel-study-app-psi.vercel.app
-- Vercel Preview: https://vercel-study-l2w9p7pc5-stone5656s-projects.vercel.app（GitHub deployment status は success。Preview Protection により直接アクセスは HTTP 302、各ページの結果は未確認）
+- Vercel Production（正しい確認先）: https://vercel-study-app-seven.vercel.app
+- 注: 以前に記録された `vercel-study-app-psi.vercel.app` は今回の Production 確認対象ではありません。
+- Vercel Preview（PR #4、利用者手動確認）: https://vercel-study-eagdbjfwu-stone5656s-projects.vercel.app。V1/V2 と接続確認・商品一覧を正常確認済み。詳細は [TODO V2 最終テスト記録](todo/v2/04_test_results_v2.md) を参照。
 
 ## 動作確認
 
-| 確認時点               | `/`                                   | `/api/db-check`                       | `/db-sample`                       |
-| ---------------------- | ------------------------------------- | ------------------------------------- | ---------------------------------- |
-| ローカル               | 既存テストで HTTP 200 を確認          | 実 DB 確認待ち                        | 実 DB 確認待ち                     |
-| Preview（マージ前）    | 未確認                                | 未確認                                | 未確認                             |
-| Production（マージ前） | HTTP 500 `FUNCTION_INVOCATION_FAILED` | HTTP 500 `FUNCTION_INVOCATION_FAILED` | 未確認（当時のコードにルートなし） |
-| Production（マージ後） | 未確認                                | 未確認                                | 未確認                             |
+| 確認時点                                     | `/`      | `/api/db-check` | `/db-sample` |
+| -------------------------------------------- | -------- | --------------- | ------------ |
+| ローカル                                     | HTTP 200 | HTTP 200        | HTTP 200     |
+| Preview（PR #4、利用者手動確認）             | 成功     | 成功            | 成功         |
+| 誤ったホストでの過去確認（Production対象外） | 対象外   | 対象外          | 対象外       |
+| Production（最終、利用者手動確認）           | 成功     | 成功            | 成功         |
 
 ## SQL 実行記録
 
@@ -32,7 +33,7 @@
 
 ## エラーと対応
 
-- Production の `/` と `/api/db-check` が HTTP 500 `FUNCTION_INVOCATION_FAILED`。原因は Vercel の Function Logs を確認できておらず未確定。`DATABASE_URL` 未設定時に DB モジュールの初期化で Express アプリ全体がロード失敗する可能性を切り分け候補とし、DB 接続設定の検証を DB 利用ルート内に移してトップページは表示可能にする変更を実装。Vercel Function Logs は未確認のため、Production の根本原因確定と修正反映は未完了。Preview も Vercel Protection により HTTP 302 となり、実アプリの確認は未完了。
+- 過去に `vercel-study-app-psi.vercel.app` を対象にした際にエラーを観測したが、このホストは最終 Production の確認先ではなかった。正しい Production URL `https://vercel-study-app-seven.vercel.app` では利用者がマージ後の `/`、接続確認、商品一覧、V1/V2 の全機能を正常確認済み。詳細は [TODO V2 最終テスト記録](todo/v2/04_test_results_v2.md) を参照。
 
 ## 確認問題
 

@@ -1,7 +1,9 @@
 # TODO アプリ V2 テスト結果
 
 - Branch: `feature/todo-v2`
-- Pull Request: https://github.com/Stone5656/vercel-study-app/pull/4（open、マージ前）
+- Pull Request: https://github.com/Stone5656/vercel-study-app/pull/4（マージ済み）
+- マージコミット: `10e42a3b61d84ee3f0e49eeaa07ec29d0d94be00`
+- 最終 Git 状態: `main` と `origin/main` は同じマージコミット
 
 ## 実装内容
 
@@ -34,28 +36,30 @@
 
 E2E は `pnpm exec playwright test --output=/tmp/todo-v2-e2e-final` で実行。初回 V2 E2E は、ポート3000の古い `pnpm start` を Playwright が再利用して失敗。古いプロセスを停止し、最新サーバーで再実行して全3件成功しました。既存データを消去せず、E2E が作成した自分の V1/V2 データだけを削除しました。
 
-## Preview（マージ前）
+## Preview（マージ前）— 利用者による手動確認
 
-- URL: https://vercel-study-eagdbjfwu-stone5656s-projects.vercel.app（GitHub deployment status success、2026-11-11 06:51 UTC）
-- 別 URL: https://vercel-study-103ace87q-yjs-projects-e19df116.vercel.app（deployment status success）
-- 匿名アクセス確認: `/`, `/api/db-check`, `/db-sample`, `/todo`, `/api/v1/todos`, `/todo-v2`, `/api/v2/todos` は全て HTTP 302（Vercel Preview Protection）。認証後の結果は未確認。
-- V1/V2 routes、CRUD、priority、filters: 認証済みブラウザでの操作待ち
+- URL: https://vercel-study-eagdbjfwu-stone5656s-projects.vercel.app
+- 既存トップページ、`/api/db-check`、`/db-sample`、V1 `/todo`・`/api/v1/todos`、V2 `/todo-v2`・`/api/v2/todos`: すべて正常動作。
+- V2 TODO 登録、low / normal / high の優先度設定・変更、完了状態更新、completed と priority の単独・組み合わせ絞り込み、削除: すべて成功。
+- V1 CRUD: 成功。
+- V1 / V2 データ分離: 成功。
+- 確認者: 利用者。Codex は Preview Protection のため匿名確認では HTTP 302 のみを観測しており、Preview の実操作を行っていない。
 
-## Production（マージ前）
+## Production（マージ後）— 利用者による手動確認
 
-2026-11-11 UTC に `https://vercel-study-app-psi.vercel.app` を確認。
+- 正しい Production URL: https://vercel-study-app-seven.vercel.app
+- `/`: 正常。
+- `/api/db-check`: 正常。
+- `/db-sample`: 正常。
+- `/todo`、`/api/v1/todos` および V1 CRUD: 正常。
+- `/todo-v2`、`/api/v2/todos` および V2 CRUD、優先度変更、完了状態更新、単独・組み合わせ絞り込み: 正常。
+- V1 / V2 データ分離: 正常。
+- 確認者: 利用者。手動確認の詳細な HTTP status code は報告されていないため記載していない。
+- `DATABASE_URL` が Production に設定済みとの確認を利用者から受領。
 
-| URL             | 結果                      |
-| --------------- | ------------------------- |
-| `/`             | 200                       |
-| `/api/db-check` | 503、database unavailable |
-| `/db-sample`    | 503                       |
-| `/todo`         | 200                       |
-| `/api/v1/todos` | 503 `DB_UNAVAILABLE`      |
-| `/todo-v2`      | 404（V2未デプロイ）       |
-| `/api/v2/todos` | 404（V2未デプロイ）       |
+### URL の訂正に関する履歴
 
-V1 のアプリコードは動作していますが Production の DB 接続ができていません。Vercel の環境変数設定または接続先状態が原因候補ですが、Vercel 設定・Function Logs にアクセスできておらず原因未確定です。秘密情報は取得していません。
+以前の自動確認で使用した `https://vercel-study-app-psi.vercel.app` は今回の Production 確認対象ではない。そこで得た503等の結果は Production の最終結果として扱わず、正しいホストでの上記利用者確認を最終結果とする。
 
 ## V2 要件別
 
@@ -74,10 +78,10 @@ V1 のアプリコードは動作していますが Production の DB 接続が�
 ## 不具合と修正
 
 - V2 初回 E2E が古いサーバー再利用で V2 route を見つけられず失敗。既存 `pnpm start` を停止し、最新コードの dev server で再実行して全件成功。
-- Production の V1 DB route は503。コード変更を加えず、Vercel 側確認待ちとして記録。
+- 以前の確認で Production と誤認したホストに対する応答を記録していた。最終確認先は利用者指定の `https://vercel-study-app-seven.vercel.app` であり、そこでの V1 / V2 動作は利用者の手動確認ですべて成功。アプリコードの修正は不要でした。
 
 ## 設計との差分・未実施
 
-- Router → Controller → Model 分離、共有Pool、V2専用テーブル/API/UI の設計どおり。
-- Preview と Production の V2 検証、PR merge 後の本番確認は未実施。
-- Preview Protection があればユーザーの認証済みブラウザで操作確認が必要。
+- Router → Controller → Model 分離、共有 Pool、V2 専用テーブル/API/UI の設計どおり。
+- Local の自動テストと、Preview / Production の利用者による手動検証を区別して記録。
+- Preview / Production での手動操作に対する詳細な status code、Vercel のログは取得していない。

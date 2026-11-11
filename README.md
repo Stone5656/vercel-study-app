@@ -2,6 +2,10 @@
 
 Express、TypeScript、EJSを使用したWebアプリケーションです。
 
+## TODO アプリ V1 / V2
+
+V1 と V2 は API・画面・DB テーブルを分離しています。V1 は `/todo` と `/api/v1/todos`、`todo_tasks` を使い、V2 は `/todo-v2` と `/api/v2/todos`、`v2_todo_tasks` を使います。V2 は優先度（low / normal / high）と完了状態・優先度の絞り込みに対応します。V1 のデータを V2 へ移行しません。
+
 ## Neon PostgreSQL
 
 PostgreSQL 接続には `pg` の共有 Pool を使い、接続文字列は環境変数 `DATABASE_URL` から読み込みます。ローカルでは `dotenv/config` が `.env` を読み込みます。`.env` は Git にコミットしないでください。Vercel では Preview / Production の各環境に `DATABASE_URL` を登録します。
