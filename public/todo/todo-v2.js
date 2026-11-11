@@ -89,6 +89,7 @@ function startTodoAppV2() {
   function setBusy(isBusy, message = '') {
     submitButton.disabled = isBusy;
     titleInput.disabled = isBusy;
+    priorityInput.disabled = isBusy;
     completedFilter.disabled = isBusy;
     priorityFilter.disabled = isBusy;
     resetButton.disabled = isBusy;
@@ -162,6 +163,7 @@ function startTodoAppV2() {
   }
 
   async function loadTodos() {
+    status.textContent = '読み込み中…';
     try {
       renderTodos(await api.list(getFilters()));
     } catch (loadError) {
