@@ -1,5 +1,31 @@
 # AI活用記録
 
+## 2026-11-18 TASK-07
+
+### 修正・確認
+
+- 初期履歴GETとPOST後の履歴更新にそれぞれ15秒のAbortController deadlineを加えた。タイマーは各呼出しのfinallyで解除する。古いGETはrequest idで結果反映を拒み、新しいGETは前のcontrollerをabortする。
+- 履歴APIはHTTP 200のみ正常扱いとし、503 `DEMO_DISABLED`だけは別の停止状態とする。201など他の2xxはエラー表示。
+- DB保存を表す未完了Promiseを使い、save完了前にSupertest応答が返らないことを確認した。
+- AI停止ガードの後も共有JSON parser/TODO routerへPOSTが通り、TODO JSON parse errorが`BAD_REQUEST`のままの回帰テストを追加した。
+- TASK-05/06のroot-owned Playwright出力ディレクトリは変更せず、task07 E2Eを`/tmp`へ出した。
+
+### T01〜T20棚卸しと検証
+
+- Supertest/fake Service/Model: T01, T03-T11, T15。Gemini failure、空回答、DB failure、入力境界、disabled/Productionを再確認。T01にsave未完了時の応答保留を追加。
+- Playwright route mock: T02, T12-T14。POST/GETすべてmockし、実サービスへ通信していない。
+- Model/SQL静的: T17はModel fakeと21件UI mock、T18はSELECT文字列でtie-breakのSQL句を確認。PostgreSQL上の実順序は未検証。
+- SDK境界mock: T19で現在のpromptだけをSDKへ渡す構成を確認。
+- 静的 security/source確認: `public/`にAPI key、DB URL、Gemini SDK識別子なし、AI UIに`innerHTML`代入なし。`.env`系を除外したcredential-shaped source scanは一致なし。Gemini loggerは固定診断文字列のみ。秘密ファイルの値は出力・転載していない。
+- `pnpm test`: 70 tests / 9 suites成功。TODO V1/V2 server testsに加え、AI無効時のTODO JSON POSTと既存parse error契約をfake modelで確認。実DB TODO E2Eは未実施。
+- Playwright: 37/37 Chromium tests成功。初期/POST後history timeout、201 GET拒否、競合、POST timeout、errorからの再操作を含む。
+
+### 未解決
+
+- `sql/ai/030_create_ai_qa_logs.sql`のnamed CHECK制約は存在確認のみで式の完全一致を確認せず、同名indexが別定義なら`IF NOT EXISTS`が検出しない。`created_at` defaultも非NULLのみ確認する。NeonへSQLは実行していない。
+- DDL修正案: CHECKは`pg_get_constraintdef`、indexは`pg_get_indexdef`と`pg_index`のkey/order/direction、defaultは`pg_get_expr`で期待定義と比較するread-only preflightを追加し、差異時は停止する。
+- 実Neon、実Gemini、Preview/Production実環境は未確認。
+
 ## 2026-11-18 TASK-06
 
 ### 実装判断

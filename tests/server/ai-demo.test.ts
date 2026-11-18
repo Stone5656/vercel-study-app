@@ -8,6 +8,10 @@ import { createAiDemoGuard } from '../../src/apps/ai/aiMiddleware.js';
 import type { AiHistoryModel } from '../../src/apps/ai/aiModel.js';
 import { createAiRouter } from '../../src/apps/ai/aiRouter.js';
 import type { AiAnswerService } from '../../src/apps/ai/aiService.js';
+import {
+  createTodoRouter,
+  todoJsonErrorHandler,
+} from '../../src/apps/todo/todoRouter.js';
 
 const disabledBody = {
   success: false,
@@ -89,5 +93,46 @@ describe('AI demo guard', () => {
     assert.equal(ask.status, 502);
     assert.equal(ask.body.error.code, 'AI_UNAVAILABLE');
     assert.equal((await request(app).get('/api/ai/history')).status, 200);
+  });
+
+  it('AI機能停止中もTODO APIと既存JSONエラー契約が動作する', async () => {
+    const app = express();
+    app.use(createAiRouter(createAiDemoGuard({ AI_DEMO_ENABLED: 'false' })));
+    app.use(express.json());
+    app.use(
+      createTodoRouter({
+        async listTodos() {
+          return [];
+        },
+        async createTodo(title) {
+          return {
+            id: 101,
+            title,
+            isCompleted: false,
+            createdAt: '2026-11-18T04:00:00.000Z',
+          };
+        },
+        async setTodoCompletion() {
+          return null;
+        },
+        async deleteTodo() {
+          return false;
+        },
+      }),
+    );
+    app.use(todoJsonErrorHandler);
+
+    const created = await request(app)
+      .post('/api/v1/todos')
+      .send({ title: 'TODO while AI is disabled' });
+    const invalidJson = await request(app)
+      .post('/api/v1/todos')
+      .set('Content-Type', 'application/json')
+      .send('{invalid');
+
+    assert.equal(created.status, 201);
+    assert.equal(created.body.data.title, 'TODO while AI is disabled');
+    assert.equal(invalidJson.status, 400);
+    assert.equal(invalidJson.body.code, 'BAD_REQUEST');
   });
 });

@@ -231,6 +231,122 @@ test('UI13 clears loading state after a failed request', async ({ page }) => {
   );
 });
 
+test('history accepts only HTTP 200, not another successful 2xx status', async ({
+  page,
+}) => {
+  await page.route('**/api/ai/history', (route) =>
+    route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, items: [makeItem(1)] }),
+    }),
+  );
+  await page.goto('/ai/');
+
+  await expect(page.locator('#history-status')).toContainText(
+    '履歴を読み込めませんでした',
+  );
+  await expect(page.getByRole('listitem')).toHaveCount(0);
+});
+
+test('history timeout clears loading without an automatic retry', async ({
+  page,
+}) => {
+  await page.clock.install();
+  let requestCount = 0;
+  let releaseRequest = (): void => {};
+  const pending = new Promise<void>((resolve) => {
+    releaseRequest = resolve;
+  });
+  await page.route('**/api/ai/history', async (route) => {
+    requestCount += 1;
+    await pending;
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, items: [makeItem(1)] }),
+      });
+    } catch {
+      // The browser has already aborted the expired history request.
+    }
+  });
+  await page.goto('/ai/');
+  await expect(page.locator('#history-content')).toHaveAttribute(
+    'aria-busy',
+    'true',
+  );
+
+  await page.clock.fastForward(15_000);
+  await expect(page.locator('#history-content')).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
+  await expect(page.locator('#history-status')).toContainText(
+    '履歴を読み込めませんでした',
+  );
+  expect(requestCount).toBe(1);
+  releaseRequest();
+});
+
+test('a superseded history request cannot replace a newer history result', async ({
+  page,
+}) => {
+  let historyRequestCount = 0;
+  let releaseInitial: () => void = () => {};
+  const initialPending = new Promise<void>((resolve) => {
+    releaseInitial = resolve;
+  });
+  await page.route('**/api/ai/history', async (route) => {
+    historyRequestCount += 1;
+    if (historyRequestCount === 1) {
+      await initialPending;
+      try {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            items: [makeItem(1, '古い履歴')],
+          }),
+        });
+      } catch {
+        // The newer refresh supersedes and aborts this request.
+      }
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        items: [makeItem(2, '新しい履歴')],
+      }),
+    });
+  });
+  await page.route('**/api/ai/ask', (route) =>
+    route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        item: makeItem(2, '送信した質問'),
+      }),
+    }),
+  );
+
+  await page.goto('/ai/');
+  await page.getByLabel('質問本文').fill('送信した質問');
+  await page.getByRole('button', { name: '質問を送信' }).click();
+  await expect(page.getByRole('listitem')).toContainText('新しい履歴');
+  releaseInitial();
+
+  await expect(page.getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('listitem').first()).toContainText('新しい履歴');
+  await expect(page.getByText('古い履歴')).toHaveCount(0);
+});
+
 test('UI14 displays the question form for the later send interaction', async ({
   page,
 }) => {

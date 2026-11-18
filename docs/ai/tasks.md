@@ -73,11 +73,17 @@
 - 対応ID: 全REQ / DES-AI-002, 003, 009
 - 変更対象: server/E2E tests、`test-results.md`
 - 理由: エラー契約、秘密管理、TODO回帰を確定するため
-- 実装: T01〜T20不足分、配信物の秘密文字列検査、V1/V2回帰
+- 実装: T01〜T20棚卸し、履歴GET 15秒待機期限とHTTP 200限定、依存を待つ201テスト、秘密情報の静的検査、V1/V2回帰
 - 確認コマンド: pnpm検証一式、Playwright
-- 期待結果: モック可能な全項目が成功
-- 実測結果: 未実施
-- 未検証: 実DB/実Geminiは別区分で記録
+- 期待結果: 既存実装済みテストを再利用し、不足ケースと回帰試験が成功
+- 実測結果: `pnpm test` 70件/9 suites、Playwright 37/37、lint/typecheck/format/build/diff-check成功
+- 未検証: 実DB/実Gemini/Previewは別区分で記録し、成功扱いしない
+
+### TASK-07のPR依存関係
+
+- TASK-07開始時、PR #7（`feature/ai-task-06-question-ui`, HEAD `5ab1c7f`）は未マージだった。
+- TASK-07はHEAD `5ab1c7f`から作成した独立ブランチで作業する。PR #7へTASK-07のcommitを追加しない。
+- マージ順はPR #7 → TASK-07のPR。PR #7が先にmainへ入った場合はTASK-07側でそのmerge baseとの差分を確認してから後続PRをレビューする。
 
 ## TASK-08 Preview確認・README・提出資料
 

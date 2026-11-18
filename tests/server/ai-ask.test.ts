@@ -103,6 +103,45 @@ describe('POST /api/ai/ask', () => {
     assert.deepEqual(response.body, { success: true, item: savedItem });
   });
 
+  it('INSERT相当の保存Promiseが完了するまで201を返さない', async () => {
+    let markSaveStarted: () => void = () => {};
+    const saveStarted = new Promise<void>((resolve) => {
+      markSaveStarted = resolve;
+    });
+    let finishSave: (item: AiHistoryItem) => void = () => {};
+    const app = createAskApp({
+      service: {
+        async generateAnswer() {
+          return '回答';
+        },
+      },
+      save: () => {
+        markSaveStarted();
+        return new Promise<AiHistoryItem>((resolve) => {
+          finishSave = resolve;
+        });
+      },
+    });
+
+    let responseReceived = false;
+    const responsePromise = request(app)
+      .post('/api/ai/ask')
+      .send({ prompt: '質問' })
+      .then((response) => {
+        responseReceived = true;
+        return response;
+      });
+
+    await saveStarted;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(responseReceived, false);
+
+    finishSave(savedItem);
+    const response = await responsePromise;
+    assert.equal(response.status, 201);
+    assert.equal(responseReceived, true);
+  });
+
   it('前後の空白を除去してからServiceと保存Modelへ渡す', async () => {
     const calls: string[] = [];
     const app = createAskApp({
