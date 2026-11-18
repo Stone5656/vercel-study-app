@@ -51,6 +51,7 @@ const apiErrorMessages = {
 };
 
 const ASK_TIMEOUT_MS = 45_000;
+const HISTORY_TIMEOUT_MS = 15_000;
 const MAX_PROMPT_CODE_POINTS = 2_000;
 const MAX_JSON_BYTES = 16_384;
 
@@ -165,7 +166,7 @@ async function fetchHistory(signal) {
     return { kind: 'disabled' };
   }
 
-  if (!response.ok) {
+  if (response.status !== 200) {
     throw new Error('History request failed');
   }
 
@@ -188,6 +189,10 @@ async function refreshHistory() {
   const controller = new AbortController();
   historyController = controller;
   setHistoryLoading(true);
+  const timeoutId = window.setTimeout(
+    () => controller.abort(),
+    HISTORY_TIMEOUT_MS,
+  );
 
   try {
     const result = await fetchHistory(controller.signal);
@@ -212,6 +217,7 @@ async function refreshHistory() {
     }
     return false;
   } finally {
+    window.clearTimeout(timeoutId);
     if (requestId === historyRequestId) {
       setHistoryLoading(false);
       historyController = undefined;

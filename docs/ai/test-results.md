@@ -18,28 +18,30 @@
 
 ## 3. AI機能テスト一覧
 
-| ID  | テスト         | 方法               | 状態   | 記録                                                                          |
-| --- | -------------- | ------------------ | ------ | ----------------------------------------------------------------------------- |
-| T01 | 正常質問       | fake Service/Model | 合格   | 201とDB返却相当DTO、Service→save順を確認                                      |
-| T02 | 再読込         | E2E/モック         | 合格   | TASK-05でPlaywright page reload後に履歴API mockを再取得。実DB永続化は未確認   |
-| T03 | 履歴0件        | Supertest/モック   | 合格   | 200、`success: true`、空配列を確認                                            |
-| T04 | 空白入力       | fake Service/Model | 合格   | Service/Model未呼出しを確認                                                   |
-| T05 | 2,001文字      | fake Service/Model | 合格   | 2,000絵文字を受理、2,001コードポイントを400で拒否                             |
-| T06 | 不正JSON       | Supertest          | 合格   | 400 `INVALID_JSON`                                                            |
-| T07 | 16KiB超過      | Supertest          | 合格   | 413 `PAYLOAD_TOO_LARGE`                                                       |
-| T08 | 非JSON         | Supertest          | 合格   | 415 `UNSUPPORTED_MEDIA_TYPE`                                                  |
-| T09 | DB保存失敗     | fake Model         | 合格   | 503 `DB_UNAVAILABLE`、成功itemなし                                            |
-| T10 | AI失敗         | fake Service       | 合格   | 502、DB保存なし                                                               |
-| T11 | AI空回答       | fake Service       | 合格   | 502、DB保存なし                                                               |
-| T12 | オフライン     | E2E/モック         | 未実施 | TASK-06                                                                       |
-| T13 | 連打           | E2E                | 未実施 | TASK-06                                                                       |
-| T14 | HTML風文字列   | Playwright mock    | 合格   | TASK-05で質問・回答を文字列描画し、img/svg生成およびイベント実行なしを確認    |
-| T15 | デモ停止       | Supertest          | 合格   | 未設定/falseとProductionを503、Production以外のtrueを後続へ通すことを自動確認 |
-| T16 | 秘密管理       | 静的確認           | 未実施 | TASK-07                                                                       |
-| T17 | 履歴21件以上   | Modelモック        | 合格   | 21行を与えて公開結果が20件であることを確認                                    |
-| T18 | 同日時の履歴   | SQL静的確認        | 合格   | 固定SQLの`created_at DESC, id DESC`を確認                                     |
-| T19 | Geminiへの入力 | モック             | 未実施 | TASK-04                                                                       |
-| T20 | TODO回帰       | 既存自動テスト     | 合格   | 既存40 testsが変更後も成功                                                    |
+| ID  | テスト         | 方法                         | 状態     | 記録                                                                                                |
+| --- | -------------- | ---------------------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| T01 | 正常質問       | Supertest/fake Service+Model | 合格     | 201と保存DTO、Service→save順、およびsave未完了中に201が返らないことを確認                           |
+| T02 | 再読込         | E2E/モック                   | 合格     | TASK-05でPlaywright page reload後に履歴API mockを再取得。実DB永続化は未確認                         |
+| T03 | 履歴0件        | Supertest/モック             | 合格     | 200、`success: true`、空配列を確認                                                                  |
+| T04 | 空白入力       | fake Service/Model           | 合格     | Service/Model未呼出しを確認                                                                         |
+| T05 | 2,001文字      | fake Service/Model           | 合格     | 2,000絵文字を受理、2,001コードポイントを400で拒否                                                   |
+| T06 | 不正JSON       | Supertest                    | 合格     | 400 `INVALID_JSON`                                                                                  |
+| T07 | 16KiB超過      | Supertest                    | 合格     | 413 `PAYLOAD_TOO_LARGE`                                                                             |
+| T08 | 非JSON         | Supertest                    | 合格     | 415 `UNSUPPORTED_MEDIA_TYPE`                                                                        |
+| T09 | DB保存失敗     | fake Model                   | 合格     | 503 `DB_UNAVAILABLE`、成功itemなし                                                                  |
+| T10 | AI失敗         | fake Service                 | 合格     | 502、DB保存なし                                                                                     |
+| T11 | AI空回答       | fake Service                 | 合格     | 502、DB保存なし                                                                                     |
+| T12 | オフライン     | Playwright mock              | 合格     | POST network abort時に固定案内、入力保持、送信UI復帰、自動再送なし                                  |
+| T13 | 連打           | Playwright mock              | 合格     | 二度目のsubmit eventを送信中フラグで無視し、POST 1回を確認                                          |
+| T14 | HTML風文字列   | Playwright mock              | 合格     | 質問・回答双方でDOM要素生成とscript/event実行がない                                                 |
+| T15 | デモ停止       | Supertest                    | 合格     | 未設定/falseとProductionを503、Production以外のtrueを後続へ通すことを自動確認                       |
+| T16 | 秘密管理       | 静的確認+自動テスト          | 合格     | publicにAPI key/DB URL/SDK識別子なし、innerHTML代入なし、Service未設定時安全失敗                    |
+| T17 | 履歴21件以上   | Model/E2E mock               | 合格     | Model結果・UI表示とも20件に制限。実DBデータでは未確認                                               |
+| T18 | 同日時の履歴   | SQL静的確認                  | 静的合格 | 固定SELECTの`created_at DESC, id DESC`を確認。DBでの実行・同時刻行は未確認                          |
+| T19 | Geminiへの入力 | SDK境界mock                  | 合格     | fake clientへの入力は現在のpromptのみ。実Gemini通信は未実施                                         |
+| T20 | TODO回帰       | server自動テスト             | 合格     | TASK-07時点の70 server tests成功。AI停止中のTODO/JSON契約もfake modelで確認。DB依存TODO E2Eは未実施 |
+
+T01〜T15、T17、T19、T20の「合格」は記載した自動テスト/モック/静的確認の範囲に限る。実Neon検証済みを意味しない。実DB・実Geminiの項目は本タスクでも未実施。
 
 ## 4. TASK-01変更後（2026-11-18）
 
@@ -142,3 +144,24 @@ E2EではPOST/GETを`page.route()`でmockし、実Gemini・Neonへ通信して�
 E2E出力は既存のroot所有`test-results/`を変更せず、`--output=/tmp/vercel-study-ai-task06-results`へ保存した。TASK-05と同様、Playwrightの既定出力先はpermission deniedとなる環境上の制約がある。
 
 実Neonへの保存/履歴再取得、実Geminiの回答、Preview/Production、実回線断時のserver-side処理継続は未実施。`ai_qa_logs`の制約/index定義照合の未解決指摘は継続する。`AI_UNAVAILABLE` statusはPR #6で502へ統一済み。
+
+## 11. TASK-07異常系・回帰（2026-11-18）
+
+| 項目                   | 結果                                                       |
+| ---------------------- | ---------------------------------------------------------- |
+| `pnpm lint`            | 成功                                                       |
+| `pnpm typecheck`       | 成功                                                       |
+| `pnpm format:check`    | 成功                                                       |
+| `pnpm test`            | 成功、70 tests / 9 suites                                  |
+| `pnpm build`           | 成功                                                       |
+| `git diff --check`     | 成功                                                       |
+| Playwright履歴・質問UI | 成功、37/37 Chromium cases                                 |
+| セキュリティ静的確認   | public secret/SDK検索なし、`innerHTML`代入なし、ログ固定文 |
+
+追加修正は履歴GETの15秒deadlineとHTTP 200限定、古いGETの結果隔離。既存server testsを再利用し、保存Promise未完了時に201未返却の1件を追加した。Playwrightでは初期GETとPOST後GET双方のtimeout、GET 201拒否、競合、POST成功・GET失敗時の回答保持を確認。APIはすべてモック。
+
+静的セキュリティ確認では`public/`内に`GEMINI_API_KEY`、`DATABASE_URL`、`@google/genai`の参照がなく、AI UIに`.innerHTML`代入がないことを確認した。`.env`系を除外したソースのcredential-shaped pattern検索も一致なし。AI Serviceのログ呼出しは固定文`Gemini request failed`だけ。ProductionではAI guardのserver testsでService/Model callが0回。未設定API key/modelのServiceテストは安全に失敗し、既存appのGET `/` Supertestも成功する。秘密ファイルの値を手動で開いて出力していない。
+
+実Neon/Gemini/Previewの確認は未実施。既存TODO V1/V2のserver testsは成功し、TODOのDB依存Playwright E2Eは実行していない。SQLは静的確認のみで、CHECK定義、index列/順序/方向、`created_at` defaultの既存定義との完全一致は未検証。修正案は、名前付きCHECKに対する`pg_get_constraintdef`、index全定義に対する`pg_get_indexdef`と`pg_index` catalog情報、defaultに対する`pg_get_expr`を読み取り専用queryで確認し、完全一致を明示する安全検査をDDLへ加えること。今回DBへSQLは実行していない。
+
+Playwright出力は既存root所有`test-results/`を変更せず、`--output=/tmp/vercel-study-ai-task07-results`へ保存した。TASK-05/06で確認済みの既定出力先permission issueは継続。

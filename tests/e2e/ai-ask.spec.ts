@@ -371,24 +371,39 @@ test('UI29 rejects a malformed 201 payload without showing an answer', async ({
   page,
 }) => {
   await mockHistory(page);
-  await page.route('**/api/ai/ask', (route) =>
-    route.fulfill({
+  let postCount = 0;
+  await page.route('**/api/ai/ask', (route) => {
+    postCount += 1;
+    const invalidItems = [
+      { id: 0, prompt: '質問本文', response: '回答', createdAt },
+      { id: 42, prompt: '質問本文', response: '  ', createdAt },
+      { id: 42, prompt: '質問本文', response: '回答', createdAt: 'invalid' },
+    ];
+    return route.fulfill({
       status: 201,
       contentType: 'application/json',
       body: JSON.stringify({
         success: true,
-        item: { id: 0, prompt: '質問本文', response: '回答', createdAt },
+        item: invalidItems[postCount - 1],
       }),
-    }),
-  );
+    });
+  });
   await page.goto('/ai/');
-  await submitPrompt(page);
 
-  await expect(page.locator('#answer-panel')).toBeHidden();
-  await expect(page.locator('#submit-status')).toContainText(
-    '応答を確認できませんでした',
-  );
-  await expect(page.getByLabel('質問本文')).toHaveValue('質問本文');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt === 0) {
+      await submitPrompt(page);
+    } else {
+      await page.getByRole('button', { name: '質問を送信' }).click();
+    }
+
+    await expect(page.locator('#answer-panel')).toBeHidden();
+    await expect(page.locator('#submit-status')).toContainText(
+      '応答を確認できませんでした',
+    );
+    await expect(page.getByLabel('質問本文')).toHaveValue('質問本文');
+  }
+  expect(postCount).toBe(3);
 });
 
 test('UI30 displays HTML-like prompt and answer strings only as text', async ({
@@ -449,4 +464,94 @@ test('UI31 retains old history and adds the accepted question without conflict',
   await expect(page.getByRole('listitem').first()).toContainText('新しい質問');
   await expect(page.getByText('以前の質問')).toBeVisible();
   await expect(page.locator('#answer-response')).toHaveText('新しい回答');
+});
+
+test('UI32 keeps the form usable for a deliberate retry after an error', async ({
+  page,
+}) => {
+  await mockHistory(page);
+  let postCount = 0;
+  await page.route('**/api/ai/ask', (route) => {
+    postCount += 1;
+    if (postCount === 1) {
+      return route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          error: { code: 'AI_UNAVAILABLE', message: 'private detail' },
+        }),
+      });
+    }
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        item: item(42, '再操作した質問', '再操作後の回答'),
+      }),
+    });
+  });
+  await page.goto('/ai/');
+  await submitPrompt(page, '再操作した質問');
+  await expect(page.locator('#submit-status')).toContainText(
+    'AIから回答を取得できませんでした',
+  );
+
+  await expect(page.getByRole('button', { name: '質問を送信' })).toBeEnabled();
+  await page.getByRole('button', { name: '質問を送信' }).click();
+  await expect(page.locator('#answer-response')).toHaveText('再操作後の回答');
+  expect(postCount).toBe(2);
+});
+
+test('UT02 keeps a saved answer and restores the form when follow-up history times out', async ({
+  page,
+}) => {
+  await page.clock.install();
+  let historyRequestCount = 0;
+  let releaseHistory = (): void => {};
+  const pendingHistory = new Promise<void>((resolve) => {
+    releaseHistory = resolve;
+  });
+  await page.route('**/api/ai/history', async (route) => {
+    historyRequestCount += 1;
+    if (historyRequestCount === 1) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, items: [] }),
+      });
+      return;
+    }
+
+    await pendingHistory;
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, items: [item(42, '質問本文')] }),
+      });
+    } catch {
+      // The browser has already aborted the expired history request.
+    }
+  });
+  await mockAskSuccess(page);
+  await page.goto('/ai/');
+  await submitPrompt(page);
+
+  await expect(page.locator('#answer-response')).toHaveText('保存されたAI回答');
+  await expect(page.getByRole('button', { name: '質問を送信' })).toBeDisabled();
+  await page.clock.fastForward(15_000);
+
+  await expect(page.locator('#answer-response')).toHaveText('保存されたAI回答');
+  await expect(page.locator('#submit-status')).toHaveText(
+    '回答は保存されましたが、履歴の更新に失敗しました。',
+  );
+  await expect(page.locator('#history-content')).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
+  await expect(page.getByRole('button', { name: '質問を送信' })).toBeEnabled();
+  await expect(page.getByLabel('質問本文')).toHaveValue('');
+  releaseHistory();
 });
