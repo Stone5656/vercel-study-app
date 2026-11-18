@@ -125,12 +125,29 @@ Google公式のSDKリリース資料ではNode.js 22以上が必要とされる�
 
 ## 6. UI設計
 
-- 初期表示で履歴GETを1回実行する。
-- 送信中フラグで同一画面の連打を防ぐ。
-- `AbortController`の45秒を参考に待機するが、自動再送しない。
-- timeout時は保存結果が不明な可能性を案内し、履歴確認を促す。
-- 質問と回答はDOM生成後に`textContent`へ設定する。
+- `/ai/` は既存の`express.static(public)`で配信し、`/ai`は静的配信の末尾スラッシュリダイレクトを利用する。TOPから `/ai/` へリンクする。
+- 初期表示で`GET /api/ai/history`を1回実行する。HTTP status、JSON、success、items配列、および各DTOの値を検証し、APIの返却順を保って最大20件を描画する。自動再試行はしない。
+- ローディング、正常、0件、一般エラー、`503 DEMO_DISABLED`を別の状態として表示する。詳細なエラー文字列は画面へ出さない。
+- DOM `createElement()`、`textContent`、`append()`、`replaceChildren()`で質問・回答を描画する。日時が不正なら「日時不明」と表示する。
+- 質問入力はtrim後のUnicodeコードポイント数を`Array.from(prompt).length`で検査し、1〜2,000文字を許可する。JSON本文は`TextEncoder`で16,384 byte以下か確認する。サーバー検証も維持する。
+- submit時は標準遷移を止め、送信中フラグとdisabledボタンで二重送信を防止する。待機中は状態を表示する。
+- POSTは`/api/ai/ask`へJSONで行う。201、`success: true`、itemのid/prompt/response/createdAtを検証し、成功itemを安全に表示して入力欄をクリアする。不正な201応答も再送せず履歴確認を案内する。
+- APIエラーは既知のHTTP statusと`error.code`の組み合わせだけ固定メッセージに変換する。任意のmessage・未知code・不正JSONは一般エラーとする。失敗時は入力を保持する。
+- POST成功後に履歴取得を再利用する。履歴GETの失敗は送信成功と分離し、回答・送信成功を保持して履歴更新失敗だけを案内する。
+- POSTは`AbortController`で45秒後に中断する。中断はGemini/DB処理を取り消す保証がないため、自動再送せず入力を保持し、保存結果不明と履歴確認を案内する。POST完了後の履歴GETはこのtimeoutの対象に含めない。
+- 質問・回答はDOM要素の`textContent`で表示する。改行はCSSで保持し、Markdown変換はしない。
 - Markdown変換、streaming、`innerHTML`への値挿入は行わない。
+
+### TASK-05で記録した未解決事項
+
+- `sql/ai/030_create_ai_qa_logs.sql`の同名制約と複合indexが既存定義に完全一致するか照合しきれていない。修正・レビュー承認前にNeonへ適用しない。
+- E2Eのreload確認はPlaywright routeで応答をモックした再取得であり、実Neonの永続化確認ではない。
+
+### APIエラーstatusのレビュー指摘
+
+PR #6のマージで設定不足時の`AI_UNAVAILABLE`が502へ修正され、Gemini呼出し失敗時と一致した。TASK-05時点の文書に残っていた不一致の記述は解消済みとする。
+
+TASK-05で利用したPlaywright出力先`test-results/`はroot所有で書込不可だった。既存ファイルの所有権は変更せず、TASK-06のE2Eでは`--output=/tmp/...`を指定した。
 
 ## 7. Vercel実行上限
 

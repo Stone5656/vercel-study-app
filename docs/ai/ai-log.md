@@ -1,5 +1,56 @@
 # AI活用記録
 
+## 2026-11-18 TASK-06
+
+### 実装判断
+
+- フォーム送信を非同期化し、trim後のコードポイント数とJSON本文byte数を送信前に検査した。送信中フラグとdisabledボタンを併用する。
+- HTTP 201とDTO全項目を検証してから回答を表示し、入力欄をクリアする。既知HTTP/code組み合わせだけ安全な固定文に変換し、APIの任意messageは表示しない。
+- POST成功後は履歴取得処理を再利用する。GET失敗を質問送信の失敗にしない。
+- fetch中断はサーバー側処理を取り消す保証がないため、45秒timeout時に保存結果不明と履歴確認を案内し、自動再送しない。ネットワーク失敗も結果不明の固定案内とする。
+- Playwright fake clockでtimeoutを検証した。POST/GETはすべてroute mockで、実Gemini/Neonを使わない。
+- TASK-05のAI_UNAVAILABLE status不一致はPR #6で解消済みに更新した。SQLの制約/index完全照合レビュー指摘は未解決のまま維持する。
+
+### 検証
+
+- `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`（68件/9 suites）, `pnpm build`, `git diff --check`: 成功
+- Playwright: 履歴・質問UI 32/32件成功
+- 既存root所有`test-results/`の権限は変更せず、E2E結果は`/tmp/vercel-study-ai-task06-results`へ出力した。
+
+### 未実施
+
+- 実Neon、実Gemini、Vercel Preview/Production
+- 実回線timeout後のserver-side処理・保存状態
+- DB依存のTODO E2E
+
+## 2026-11-18 TASK-05
+
+### 実装判断
+
+- `express.static(public)`が`/ai`を`/ai/`へredirectし、`public/ai/index.html`を配信できることをChromium E2Eで確認したため、Express routeを追加しなかった。
+- 初期表示で履歴APIを1回取得し、status/JSON/DTOを検証した後、返却順を維持して最大20件を表示する。自動再試行はしない。
+- ローディング、空、一般エラー、`DEMO_DISABLED`を分け、APIのエラー本文は表示しない。
+- 質問と回答はDOM elementの`textContent`として表示し、HTML/Markdown解釈を避ける。質問フォームは送信未実装のためdisabledとし、submitもpreventDefaultする。
+- Playwrightの履歴APIはすべてroute mock。reloadによる再取得は確認したが実Neonの永続化は未確認。
+- TASK-04レビュー指摘だった設定不足時503とGemini失敗502の`AI_UNAVAILABLE` status不一致はPR #6で502へ統一済み。以前の記録は対応済みに更新する。
+- `ai_qa_logs`の既存同名制約と複合indexが完全一致するかというSQLレビュー指摘を保持する。
+
+### 検証
+
+- `pnpm lint`: 成功
+- `pnpm typecheck`: 成功
+- `pnpm format:check`: 成功
+- `pnpm test`: 68 tests / 9 suites成功（TODOサーバーテストを含む）
+- `pnpm build`: 成功
+- `git diff --check`: 成功
+- AI履歴UI Playwright: 15/15 Chromium tests成功。`.last-run.json`の既存権限問題を避け、出力先を`/tmp/vercel-study-ai-task05-results`に指定。
+
+### 未実施
+
+- 実Neon履歴の表示と永続化確認
+- 実Gemini、Preview、Productionの実環境確認
+- 実DB依存の既存TODO E2E（今回のAI UIテストでは実DB操作を避けるため未実行）
+
 ## 2026-11-18 TASK-04
 
 ### SDKとService
