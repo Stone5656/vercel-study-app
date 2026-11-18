@@ -25,7 +25,7 @@ function createTestApp(environment: NodeJS.ProcessEnv) {
     },
   };
   const serviceGuard = (_req: express.Request, res: express.Response): void => {
-    res.status(503).json({
+    res.status(502).json({
       success: false,
       error: {
         code: 'AI_UNAVAILABLE',
@@ -86,7 +86,7 @@ describe('AI demo guard', () => {
       .post('/api/ai/ask')
       .set('Content-Type', 'application/json')
       .send({ prompt: 'question' });
-    assert.equal(ask.status, 503);
+    assert.equal(ask.status, 502);
     assert.equal(ask.body.error.code, 'AI_UNAVAILABLE');
     assert.equal((await request(app).get('/api/ai/history')).status, 200);
   });
