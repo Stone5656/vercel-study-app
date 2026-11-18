@@ -325,7 +325,7 @@ describe('POST /api/ai/ask', () => {
       .post('/api/ai/ask')
       .send({ prompt: '質問' });
 
-    assert.equal(response.status, 503);
+    assert.equal(response.status, 502);
     assert.equal(response.body.error.code, 'AI_UNAVAILABLE');
   });
 });
