@@ -114,7 +114,7 @@ export function createAiAnswerServiceGuard(
       Boolean(environment.GEMINI_API_KEY) && Boolean(environment.GEMINI_MODEL);
 
     if (!mockEnabled && !realServiceConfigured) {
-      res.status(503).json({
+      res.status(502).json({
         success: false,
         error: {
           code: 'AI_UNAVAILABLE',
