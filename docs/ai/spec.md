@@ -32,7 +32,7 @@
 
 これによりAI専用上限を先に適用し、TODOのJSON解析契約は維持する。TASK-01では1、2の公開ガード、3以降の順序だけを実装する。
 
-TASK-02ではGET履歴APIだけを実装したため、本文を持つPOST用のContent-Type検証、16KiB parser、JSON/sizeエラー変換は未実装である。これらは質問処理を実装するTASK-03で、共通parserより前のAIルーター内部へ追加する。
+TASK-03でPOST用のContent-Type検証、AI専用JSON parser、JSON/sizeエラー変換を追加した。共通parserより前のAIルーター内部で処理する。
 
 ## 3. 公開制御
 
@@ -74,9 +74,22 @@ PostgreSQLの`char_length`はデータベース文字エンコーディング上
 
 SQL先頭の確認queryでcolumns、constraints、indexesを表示する。同名テーブルがある場合は確認queryだけを先に実行し、差異があれば後続DDLを実行しない。DDL内でも期待する列・名前付き制約を確認し、差異時はindex作成前に例外で停止する。
 
-## 5. Gemini SDK設計（TASK-04で実装）
+### TASK-03質問送信仕様
 
-2026-11-18時点のGoogle公式資料で、モデルID`gemini-3.5-flash-lite`、`models.generateContent`、`GenerateContentConfig.maxOutputTokens`、`automaticContinuation: false`、`httpOptions.timeout`、`httpOptions.retryOptions.attempts`を確認した。
+- POST middleware順序はデモガード → JSON Content-Type検証 → `express.json({ limit: 16_384, strict: false })` → AI専用parser error handler → 模擬Service有効確認 → Controller。
+- `strict: false`により有効なJSON scalarやnullもControllerへ渡し、JSON objectでない入力を`VALIDATION_ERROR`として扱う。不正JSON構文は`INVALID_JSON`、本文上限超過は`PAYLOAD_TOO_LARGE`。
+- promptはtrim後に`Array.from(prompt).length`で1〜2,000コードポイントを確認し、trim後文字列をServiceとINSERTへ渡す。
+- 回答生成後、空白だけの回答を拒否する。その後にだけModelのパラメータ化INSERTを実行し、`RETURNING`したDB行をDTOに変換する。INSERT成功後に限り201を返す。
+- 模擬Serviceは固定文`接続確認用の模擬回答`を返す。Routerでは`AI_DEMO_ENABLED=true`に加えて`AI_MOCK_ENABLED=true`かつ`VERCEL_ENV`未設定の場合だけ有効。Preview/Productionは模擬回答経路を使用できず、`AI_UNAVAILABLE`を返す。
+- Router factoryは公開ガード・履歴Model注入を保ち、模擬回答Serviceとsave関数も差し替え可能。
+
+### SQLレビュー未解決事項
+
+`030_create_ai_qa_logs.sql`は同名制約・indexの存在と一部の制約名を確認するが、既存制約式の意味や既存indexのキー列・順序・ASC/DESCまで完全一致を検証していない。`IF NOT EXISTS`は同名オブジェクトの定義を照合しない。レビュー指摘として未解決であり、実Neon適用前に照合SQL/停止条件を修正・承認する必要がある。TASK-03ではこのDDLを変更・実行していない。
+
+## 5. Gemini SDK設計
+
+TASK-04では`@google/genai` 3.4.0をexact pinで導入し、モデルID`gemini-3.5-flash-lite`を`models.generateContent`で呼び出す。API key/modelは実行時に環境変数から取得するため、未設定でもアプリ起動を妨げない。
 
 予定設定:
 
@@ -96,13 +109,19 @@ config: {
 }
 ```
 
-公式資料では`attempts`は初回を含み、0または1は再試行なしである。またAbortSignal/timeoutによるクライアント中断はサービス側処理の取消しを保証しない。TASK-04で実際に固定する`@google/genai`版の型定義と挙動を再確認し、型に存在しない設定を強制しない。
+公式資料と3.4.0の型定義では`httpOptions.timeout`はHTTP request timeout（ミリ秒）であり、`attempts`は初回を含む試行数なので1は再試行なしを意味する。timeoutは全サーバー処理の総期限ではなく、DB保存・HTTP応答時間は別途必要。`automaticContinuation: false`は追加継続リクエストを止め、AFCもdisableにする。
+
+Serviceは現在のprompt文字列だけを送り、履歴を参照しない。空または欠落したtext、API例外、timeoutを安全なService失敗へ変換する。Service内ログは固定の失敗文のみで、質問・回答・API key・例外本文は記録しない。Controllerはこれらを502 `AI_UNAVAILABLE`に変換してDBを呼ばない。
+
+設定選択はRouter生成時に依存注入する。ローカルの`AI_DEMO_ENABLED=true`かつ`AI_MOCK_ENABLED=true`は固定模擬Serviceを選び、ローカルでmockがfalse/未設定の場合はGemini Serviceを選ぶ。Previewではmock選択を禁止してGemini Serviceのみとし、Productionは先行する公開ガードが常に503で停止する。
 
 参照:
 
 - [Google Gen AI SDK](https://googleapis.github.io/js-genai/)
 - [GenerateContentConfig](https://googleapis.github.io/js-genai/release_docs/interfaces/types.GenerateContentConfig.html)
 - [Gemini models](https://ai.google.dev/gemini-api/docs/models)
+
+Google公式のSDKリリース資料ではNode.js 22以上が必要とされる。プロジェクトのDev ContainerはPlaywright公式イメージを使い、本確認環境はNode 26だった。対象Vercel runtimeのNodeバージョンは未確認。
 
 ## 6. UI設計
 
@@ -115,4 +134,4 @@ config: {
 
 ## 7. Vercel実行上限
 
-30秒のSDK timeoutに加えてDB保存時間が必要である。対象Vercelプロジェクトのプラン、Function runtime、`maxDuration`はリポジトリだけでは確認できないため未検証とする。TASK-08までに実設定を読み取り確認し、SDK timeoutより十分長いことを確認する。不要な`vercel.json`は追加しない。
+30秒のSDK HTTP request timeoutに加えてDB保存・HTTP応答時間が必要である。対象Vercelプロジェクトのプラン、Function runtime、`maxDuration`はリポジトリだけでは確認できないため未検証とする。Preview実通信前に実設定を確認する。不要な`vercel.json`は追加しない。

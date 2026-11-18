@@ -45,3 +45,11 @@ Preview と Production は別々の Vercel デプロイ環境で、環境変数�
 - `pnpm test`: Supertestを使ったサーバーテストを実行します。
 - `pnpm test:e2e`: Chromiumを使ったPlaywright E2Eテストを実行します。
 - `pnpm build`: TypeScriptを`dist/`へコンパイルします。
+
+## AI質問機能のローカル実行
+
+AI APIの利用には`AI_DEMO_ENABLED=true`が必要です。ローカル模擬回答は`AI_MOCK_ENABLED=true`を追加します。実Geminiを使う場合はローカルで`AI_MOCK_ENABLED=false`、`GEMINI_API_KEY`、`GEMINI_MODEL=gemini-3.5-flash-lite`を設定してください。APIキーはサーバー環境変数にのみ設定し、リポジトリへ保存しないでください。
+
+Gemini設定がない状態でもアプリと既存TODOは起動しますが、AI APIは安全なエラーを返します。ProductionではAI APIは常に停止します。実Neon保存の確認には、承認済みのAI履歴DDLを対象DBへ適用済みである必要があります。
+
+実Geminiの手動確認は、Google AI StudioでAPI keyを準備し、ローカル環境へ`GEMINI_API_KEY`、`GEMINI_MODEL=gemini-3.5-flash-lite`、`AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=false`を設定して行います。`pnpm dev`後に`POST /api/ai/ask`を一度呼び、HTTP応答とNeonの`ai_qa_logs`を確認し、続けて`GET /api/ai/history`で取得します。DDLはSQLレビューの未解決事項を解消・承認・適用するまで実機保存を試しません。キーはコマンド履歴やファイルに記入せず、出力・Gitへ含めないでください。
