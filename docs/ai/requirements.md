@@ -2,24 +2,24 @@
 
 ## 1. 機能・非機能要件
 
-| ID         | 要件         | 受入条件                                                                           |
-| ---------- | ------------ | ---------------------------------------------------------------------------------- |
-| REQ-AI-001 | AI質問画面   | `/ai`を表示でき、TOPから遷移できる                                                 |
-| REQ-AI-002 | 質問処理     | 現在の質問だけをExpress経由でGeminiへ送り、保存成功後に201を返す                   |
-| REQ-AI-003 | 履歴保存     | 質問、非空回答、作成日時を`ai_qa_logs`へパラメータ化SQLで保存する                  |
-| REQ-AI-004 | 履歴取得     | `created_at DESC, id DESC`で最新20件を返し、0件は正常な空配列とする                |
-| REQ-AI-005 | prompt検証   | 必須文字列をtrimし、Unicodeコードポイント数1〜2,000だけ許可する                    |
-| REQ-AI-006 | HTTP本文検証 | JSON以外は415、不正JSONは400、16,384バイト超過は413とし、AI/DBを呼ばない           |
-| REQ-AI-007 | 非同期UI     | 送信中表示、ボタン無効化、成功時だけ入力消去、失敗時保持、finally復帰を行う        |
-| REQ-AI-008 | UI安全性     | `res.ok`とJSON構造を検証し、質問・回答は`textContent`で表示して自動再送しない      |
-| REQ-AI-009 | 公開制御     | 未設定/falseは停止、Productionはtrueでも停止し、両AI APIへ503を返す                |
-| REQ-AI-010 | エラー契約   | 指定HTTP/codeと安全な固定文を返し、例外・SQL・認証情報を返さない                   |
-| REQ-AI-011 | Gemini設定   | `@google/genai`、指定モデル、1024 token、30秒、retry 1、継続無効、空回答失敗を使う |
-| REQ-AI-012 | 秘密管理     | APIキーはサーバー環境変数だけで扱い、配信物・Git・ログへ含めない                   |
-| REQ-AI-013 | 分離可能性   | Router/Controller/Service/Model/Middlewareを分離し、AIとDBをモック可能にする       |
-| REQ-AI-014 | 既存互換性   | TODO V1/V2、DB確認、共有Pool、Vercelルート構成を維持する                           |
-| REQ-AI-015 | DBスキーマ   | 非破壊DDLと取得用複合indexをSQLファイルに保存し、自動実行しない                    |
-| REQ-AI-016 | タイムアウト | ブラウザ45秒、サーバーAI通信30秒を基準とし、Vercel上限との整合を確認する           |
+| ID         | 要件         | 受入条件                                                                                          |
+| ---------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| REQ-AI-001 | AI質問画面   | `/ai`を表示でき、TOPから遷移できる                                                                |
+| REQ-AI-002 | 質問処理     | 現在の質問だけをExpress経由でGeminiへ送り、保存成功後に201を返す                                  |
+| REQ-AI-003 | 履歴保存     | 質問、非空回答、作成日時を`ai_qa_logs`へパラメータ化SQLで保存する                                 |
+| REQ-AI-004 | 履歴取得     | `created_at DESC, id DESC`で最新20件を返し、0件は正常な空配列とする                               |
+| REQ-AI-005 | prompt検証   | 必須文字列をtrimし、Unicodeコードポイント数1〜2,000だけ許可する                                   |
+| REQ-AI-006 | HTTP本文検証 | JSON以外は415、不正JSONは400、16,384バイト超過は413とし、AI/DBを呼ばない                          |
+| REQ-AI-007 | 非同期UI     | 送信中表示、ボタン無効化、成功時だけ入力消去、失敗時保持、finally復帰を行う                       |
+| REQ-AI-008 | UI安全性     | `res.ok`とJSON構造を検証し、質問・回答は`textContent`で表示して自動再送しない                     |
+| REQ-AI-009 | 公開制御     | 未設定/falseは停止、Productionはtrueでも停止し、両AI APIへ503を返す                               |
+| REQ-AI-010 | エラー契約   | 指定HTTP/codeと安全な固定文を返し、例外・SQL・認証情報を返さない                                  |
+| REQ-AI-011 | Gemini設定   | `@google/genai`、指定モデル、1024 token、30秒、retry 1、継続無効、空回答失敗を使う                |
+| REQ-AI-012 | 秘密管理     | APIキーはサーバー環境変数だけで扱い、配信物・Git・ログへ含めない                                  |
+| REQ-AI-013 | 分離可能性   | Router/Controller/Service/Model/Middlewareを分離し、AIとDBをモック可能にする                      |
+| REQ-AI-014 | 既存互換性   | TODO V1/V2、DB確認、共有Pool、Vercelルート構成を維持する                                          |
+| REQ-AI-015 | DBスキーマ   | 非破壊DDLと取得用複合indexをSQLファイルに保存し、自動実行しない                                   |
+| REQ-AI-016 | タイムアウト | 質問POSTはブラウザ45秒、履歴GETは15秒、サーバーAI通信30秒を基準とし、Vercel上限との整合を確認する |
 
 ## 2. API要件
 
