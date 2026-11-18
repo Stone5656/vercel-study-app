@@ -1,5 +1,48 @@
 # AI活用記録
 
+## 2026-11-18 TASK-04
+
+### SDKとService
+
+- Google公式`@google/genai`を3.4.0でexact pinした。SDKはNode.js 22以上を要求し、実行確認環境はNode 26。
+- `createGeminiAnswerService()`は環境から`GEMINI_API_KEY`と`GEMINI_MODEL`を呼出し時に読む。未設定でも起動時にclientを生成せず、API呼出し時の例外をControllerが502 `AI_UNAVAILABLE`へ変換する。
+- `models.generateContent`へ現在のpromptだけを渡し、output 1024、30,000ms HTTP timeout、retry attempts 1、automatic continuation false、automatic function calling disabledを指定した。
+- timeoutはSDKのHTTP request単位であり、Function全体やDB保存を含む期限ではない。
+- client factoryを依存注入可能にし、自動テストはfake clientを使う。実Geminiへの通信はしていない。
+- mock選択はローカルでdemo=trueかつmock=trueの場合に限定。Previewはmockを選ばずGemini Serviceを使用する。Productionは公開guardでService実行前に停止する。
+- 失敗時は秘密、質問・回答、例外詳細をログに出さず、固定の一般診断メッセージだけを記録する。
+
+### 未検証
+
+- 実Gemini API keyを使ったリクエスト
+- 実Neonへの保存・履歴再取得（DDLの制約/index完全照合レビューが未解決）
+- Vercel Node.js runtime、Function実行上限、Previewアクセス保護
+
+## 2026-11-18 TASK-03
+
+### 対象
+
+REQ-AI-002, 003, 005, 006, 009, 010, 013, 014およびDES-AI-001, 002, 003, 005, 009。
+
+### 判断・採否
+
+- 共通`express.json()`より先に登録済みのAI Router内で、demo guard、Content-Type、16KiB JSON parser、専用parser error handlerの順に処理する構成を採用した。
+- `strict: false`を指定し、有効JSONのnull/配列/scalarをControllerでobject validationする。構文破損だけを`INVALID_JSON`に分類する。
+- prompt長はUTF-16 code unitではなく`Array.from(trimmedPrompt).length`で測定する。
+- ServiceとDB save関数を注入可能にし、Service成功→空回答検証→INSERT→DB `RETURNING` DTO→201の順序をテストした。
+- 模擬回答をローカル限定とするため、`AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=true`、`VERCEL_ENV`未設定をすべて必要とする。実Gemini SDK/通信は未導入。
+- DB INSERTは`$1`, `$2` placeholderと`RETURNING`を使い、接続/SQL詳細は固定エラーへ隠す。
+- SQLの既存制約式とindex key/order/directionの完全照合は未解決レビュー指摘として残した。NeonへのDDL・INSERTは実施しない。
+
+### 検証
+
+- `pnpm lint`: 成功
+- `pnpm typecheck`: 成功
+- `pnpm format:check`: 成功
+- `pnpm test`: 62件、8 suites成功（fake Service/ModelによるTASK-03、TASK-02履歴、TODO V1/V2を含む）
+- `pnpm build`: 成功
+- 実Neon、実Gemini、Vercel環境: 未実施
+
 ## 2026-11-18 TASK-02
 
 ### 対象

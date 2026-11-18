@@ -7,6 +7,7 @@ import request from 'supertest';
 import { createAiDemoGuard } from '../../src/apps/ai/aiMiddleware.js';
 import type { AiHistoryModel } from '../../src/apps/ai/aiModel.js';
 import { createAiRouter } from '../../src/apps/ai/aiRouter.js';
+import type { AiAnswerService } from '../../src/apps/ai/aiService.js';
 
 const disabledBody = {
   success: false,
@@ -23,8 +24,31 @@ function createTestApp(environment: NodeJS.ProcessEnv) {
       return [];
     },
   };
-  app.use(createAiRouter(createAiDemoGuard(environment), historyModel));
-  app.post('/api/ai/ask', (_req, res) => res.sendStatus(204));
+  const serviceGuard = (_req: express.Request, res: express.Response): void => {
+    res.status(502).json({
+      success: false,
+      error: {
+        code: 'AI_UNAVAILABLE',
+        message: 'AI回答機能を利用できません',
+      },
+    });
+  };
+  const fakeService: AiAnswerService = {
+    async generateAnswer() {
+      return 'fake answer';
+    },
+  };
+  app.use(
+    createAiRouter(
+      createAiDemoGuard(environment),
+      historyModel,
+      serviceGuard,
+      fakeService,
+      async () => {
+        throw new Error('save should not run');
+      },
+    ),
+  );
   return app;
 }
 
@@ -58,7 +82,12 @@ describe('AI demo guard', () => {
       VERCEL_ENV: 'preview',
     });
 
-    assert.equal((await request(app).post('/api/ai/ask')).status, 204);
+    const ask = await request(app)
+      .post('/api/ai/ask')
+      .set('Content-Type', 'application/json')
+      .send({ prompt: 'question' });
+    assert.equal(ask.status, 502);
+    assert.equal(ask.body.error.code, 'AI_UNAVAILABLE');
     assert.equal((await request(app).get('/api/ai/history')).status, 200);
   });
 });

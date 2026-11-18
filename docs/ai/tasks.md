@@ -32,19 +32,19 @@
 - 実装: AI専用JSON/Content-Type/size処理、prompt検証、Service DI、模擬回答、INSERT後201、DB失敗時非成功
 - 確認コマンド: pnpm検証一式
 - 期待結果: T01, T04〜T09がモックで成功
-- 実測結果: 未実施
-- 未検証: 実DB、実Gemini
+- 実測結果: 2026-11-18に全検証成功。62 tests / 8 suites
+- 未検証: 実NeonへのINSERT、SQL適用、実Gemini。模擬回答とDB保存の自動テストはfake依存を使用
 
 ## TASK-04 Gemini API接続
 
 - 対応ID: REQ-AI-002, 011, 012, 016 / DES-AI-004, 009
 - 変更対象: `aiService.ts`, `package.json`, `pnpm-lock.yaml`, server tests, README
 - 理由: 公式SDKで単発質問を安全に実行するため
-- 実装: SDK固定版、指定モデル、30秒、1024 token、retry/continuation/AFC無効、空回答判定
+- 実装: `@google/genai` exact version、指定モデル、30秒HTTP timeout、1024 token、retry/continuation/AFC無効、環境別Service選択、空回答判定
 - 確認コマンド: SDK型検査、モックテスト、pnpm検証一式
 - 期待結果: T10, T11, T19が実通信なしで成功
-- 実測結果: 未実施
-- 未検証: 実Gemini（実施前に明示承認）、Vercel上限
+- 実測結果: 2026-11-18にmock SDK境界で自動テスト済み。実Gemini通信なし
+- 未検証: 実Gemini（学生本人のAPI key設定後）、実Neon、Vercel Node runtimeと実行上限
 
 ## TASK-05 履歴表示UI
 
