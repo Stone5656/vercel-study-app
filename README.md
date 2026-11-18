@@ -48,8 +48,32 @@ Preview と Production は別々の Vercel デプロイ環境で、環境変数�
 
 ## AI質問機能のローカル実行
 
-AI APIの利用には`AI_DEMO_ENABLED=true`が必要です。ローカル模擬回答は`AI_MOCK_ENABLED=true`を追加します。実Geminiを使う場合はローカルで`AI_MOCK_ENABLED=false`、`GEMINI_API_KEY`、`GEMINI_MODEL=gemini-3.5-flash-lite`を設定してください。APIキーはサーバー環境変数にのみ設定し、リポジトリへ保存しないでください。
+`/ai/`では単発の質問をGeminiへ送り、質問・回答をNeonの`ai_qa_logs`へ保存し、最新20件の履歴を表示します。APIキーはサーバー環境変数だけで扱います。
+
+必要な環境変数名は`AI_DEMO_ENABLED`、`AI_MOCK_ENABLED`、`GEMINI_API_KEY`、`GEMINI_MODEL`、`DATABASE_URL`です。値をGitやブラウザへ含めないでください。
+
+- ローカル模擬回答: `AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=true`を設定し、`VERCEL_ENV`は設定しないでください。`AI_MOCK_ENABLED=true`が模擬するのはGeminiへの通信だけです。質問・回答の保存には引き続き`DATABASE_URL`、接続可能なNeon PostgreSQL、`ai_qa_logs`テーブルとINSERT権限が必要です。DB未設定またはDDL未適用の場合、質問送信は保存成功（HTTP 201）になりません。現在DDLは既存制約・index定義の照合が未解決のため、レビュー・承認前に実DBへ適用しないでください。
+- ローカルGemini: `AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=false`、`GEMINI_API_KEY`、`GEMINI_MODEL=gemini-3.5-flash-lite`、`DATABASE_URL`を設定してください。実リクエストはAPI利用料・DB書き込みを伴います。承認済みDDLの適用後に、手動で少数回だけ実施してください。
+
+設定後に`pnpm dev`を起動します。自動検証は`pnpm lint`、`pnpm typecheck`、`pnpm format:check`、`pnpm test`、`pnpm build`と、AI UIのPlaywrightテストで行います（下のコマンド一覧を参照）。
 
 Gemini設定がない状態でもアプリと既存TODOは起動しますが、AI APIは安全なエラーを返します。ProductionではAI APIは常に停止します。実Neon保存の確認には、承認済みのAI履歴DDLを対象DBへ適用済みである必要があります。
 
-実Geminiの手動確認は、Google AI StudioでAPI keyを準備し、ローカル環境へ`GEMINI_API_KEY`、`GEMINI_MODEL=gemini-3.5-flash-lite`、`AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=false`を設定して行います。`pnpm dev`後に`POST /api/ai/ask`を一度呼び、HTTP応答とNeonの`ai_qa_logs`を確認し、続けて`GET /api/ai/history`で取得します。DDLはSQLレビューの未解決事項を解消・承認・適用するまで実機保存を試しません。キーはコマンド履歴やファイルに記入せず、出力・Gitへ含めないでください。
+### Vercel Preview運用
+
+2026-11-18の匿名GETでは、確認できたPreviewデプロイURLの`/`、`/ai/`、`/api/ai/history`がVercel SSOへリダイレクトされました。これはそのデプロイと経路での保護確認です。Dashboard上の保護方式、例外URL、canonical Preview aliasの設定は確認できていません。これらをVercel Dashboardで確認するまでPreviewの`AI_DEMO_ENABLED`をtrueにしないでください。
+
+確認手順: Vercel Dashboardで`vercel-study-app`を開き、**Settings > Deployment Protection**でPreviewの保護方式・対象範囲・例外を確認し、**Settings > Environment Variables**で各変数のEnvironment/Preview branch scopeを確認します。Previewだけで必要な`AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=false`、Gemini key/model、`DATABASE_URL`は、アクセス保護とDB分離を確認した後に適用します。秘密値自体を画面共有や資料に記録しないでください。
+
+FunctionのNode.js runtime、Fluid Compute、Functionの実効`maxDuration`はVercel Dashboardを確認できず未確認です。**Settings > Build and Deployment > Node.js Version**でruntimeを、Projectの**Functions Settings > Fluid Compute**でFluid Computeを、Function詳細で実効durationを確認してください。Gemini SDKのHTTP timeoutは30秒で、DB保存と応答に別途時間が必要です。Functionの実効上限が不明の間、30秒処理が収まると判断しないでください。`vercel.json`は追加していません。
+
+### Production運用
+
+Productionでは`VERCEL_ENV=production`により、`AI_DEMO_ENABLED=true`でも`POST /api/ai/ask`と`GET /api/ai/history`を503 `DEMO_DISABLED`で停止します。これはAI API単位の制御で、TODO V1/V2は独立しています。TASK-08ではSupertestでこの分岐を確認し、Productionデプロイの匿名GETはVercel SSOへリダイレクトされたため、アプリのProduction応答自体は確認できていません。ProductionへPOSTは行いません。
+
+### 制限事項
+
+- 履歴の保存期間と削除運用は未決定です。
+- `ai_qa_logs`の実Neon DDLは未確認・未適用です。既存CHECK制約、PK列、index列順/方向、`created_at` defaultをcatalog関数で照合するレビューが必要です。
+- 実Gemini通信、実Neonの保存・履歴取得、実DBを使うE2Eは未確認です。
+- VercelのNode.js runtime、Fluid Compute、実効Function上限、環境変数scope、Dashboardの保護例外は未確認です。Previewアクセス保護が設定画面でも確認できるまでAIを有効化しないでください。

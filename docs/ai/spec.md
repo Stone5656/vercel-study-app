@@ -159,3 +159,33 @@ TASK-05で利用したPlaywright出力先`test-results/`はroot所有で書込�
 ## 7. Vercel実行上限
 
 30秒のSDK HTTP request timeoutに加えてDB保存・HTTP応答時間が必要である。対象Vercelプロジェクトのプラン、Function runtime、`maxDuration`はリポジトリだけでは確認できないため未検証とする。Preview実通信前に実設定を確認する。不要な`vercel.json`は追加しない。
+
+## 8. TASK-08環境・運用確認（2026-11-18）
+
+### デプロイ識別と確認できた範囲
+
+- GitHubのPR #8は2026-11-18にmainへマージ済み。Vercel連携のGitHub deployment metadataにあるProject表示名は`vercel-study-app`。
+- Production deployment metadataはSHA `79e696c83e58d6ade664615be5a39b0d982cdb72`（2026-11-18 07:01 UTC）。Preview deployment metadataはSHA `9b6a1cab55f1c7a4bb1c1aef5d74f2cd13f2fe13`（2026-11-18 06:53 UTC）。いずれもGitHub deployments APIの記録であり、Vercel Dashboard設定の証明ではない。
+- Preview URLの`/`、`/ai/`、`/api/ai/history`への匿名GETはHTTP 302でVercel SSOへredirectした。Production deployment URLの`/api/ai/history`もHTTP 302で同様にredirectした。POSTは行っていない。
+- Vercel Dashboard、CLIの認証済み設定参照、Project Settings APIへアクセスできなかったため、接続repositoryのDashboard上の表示、Node.js runtime、Fluid Compute、Function実効maxDuration、環境変数の存在/scope、Protection exception一覧は未確認。公開GETの観測からこれらを推定しない。
+- 匿名GETの実測は該当deployment URLと確認したpathに限定される。canonical alias、全route、設定上の例外はDashboardで確認する必要がある。Dashboard確認完了まではPreview AIを有効化しない。
+
+### Timeout評価
+
+Gemini SDKの30秒はHTTP request timeoutであり、Geminiがその期限内に返ってもNeon INSERTとExpress応答の時間が別途必要である。ブラウザPOST 45秒はbrowser wait deadline、履歴GET 15秒も別のbrowser deadlineであり、Vercel Functionの実行上限を延長しない。実効上限が30秒近辺以下なら、保存完了前にFunctionが終了する可能性があり、30秒より長い場合もDB/response余裕を含む確認が必要。現行Function設定は未確認のため整合性は未判定。`maxDuration`を含むVercel設定ファイルは追加していない。
+
+### 環境変数と保護条件
+
+`AI_DEMO_ENABLED`、`AI_MOCK_ENABLED`、`GEMINI_API_KEY`、`GEMINI_MODEL`、`DATABASE_URL`のVercel登録有無とPreview/Production scopeはDashboardで未確認。`VERCEL_ENV`はコードで読む名前であるが、対象デプロイでの実値は取得していない。値を表示・取得する操作は行っていない。ローカルに`.env`ファイルが存在するが、内容は開いておらずGit追跡対象でもないことを確認した。
+
+DashboardではProject `vercel-study-app`の**Settings > Deployment Protection**でProtection method/scope/exceptionsを確認し、**Settings > Environment Variables**で変数ごとのPreview/Production scopeを値を開かずに確認する。Node.js versionは**Settings > Build and Deployment > Node.js Version**、Fluid ComputeはProjectの**Functions Settings > Fluid Compute**で確認し、実効durationはFunction詳細で確認する。値/scopeが確認できるまではAIのPreview有効化を行わない。
+
+### Neon DDLの停止条件
+
+`sql/ai/030_create_ai_qa_logs.sql`は変更・実行していない。適用前のread-only preflightでは、(1)`pg_get_constraintdef`で名前付きCHECK制約式、(2)`pg_constraint`と`pg_get_constraintdef`でPKの列・順序、(3)`pg_get_indexdef`と`pg_index`/`indkey`/`indoption`でindexのkey列・順序・DESC指定、(4)`pg_attrdef`と`pg_get_expr`で`created_at` defaultを取得する。期待定義との完全一致を照合し、オブジェクトがない場合は新規作成可能性を個別確認し、同名オブジェクトが不一致ならDDLを停止し手動レビューへ戻す。`IF NOT EXISTS`を定義一致の証明として扱わない。DDL修正・承認・適用は独立作業である。
+
+### 本タスクの結論
+
+Production停止はSupertestで確認済みだが、Production deployment URLのアプリ応答はSSO保護により未確認。Previewの確認したdeployment URL/pathは匿名利用を防いでいたが、Dashboardの例外設定とcanonical URLは未確認のためPreviewでAIを有効化してよい状態とは判定しない。実Gemini、実Neon、実DB E2E、Vercel Function/runtime/環境変数設定は未検証。
+
+Vercel公式資料: [Node.js versions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions)、[Function limits](https://vercel.com/docs/functions/limitations)、[Fluid Compute](https://vercel.com/docs/fluid-compute)、[Deployment Protection](https://vercel.com/docs/deployment-protection)、[Environment Variables](https://vercel.com/docs/environment-variables)。公式資料は利用可能な設定方法・一般仕様を示すもので、対象Projectの実設定を証明しない。

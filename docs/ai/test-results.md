@@ -43,6 +43,58 @@
 
 T01〜T15、T17、T19、T20の「合格」は記載した自動テスト/モック/静的確認の範囲に限る。実Neon検証済みを意味しない。実DB・実Geminiの項目は本タスクでも未実施。
 
+## TASK-08 Preview/運用確認（2026-11-18）
+
+### Vercel/GitHub読み取り確認
+
+| 項目                             | 方法・証跡                                         | 結果                                                                                                                                                       |
+| -------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 基点/PR                          | GitHub read-only API、`git rev-parse origin/main`  | PR #8 merged。base `79e696c83e58d6ade664615be5a39b0d982cdb72`。作業branch `feature/ai-task-08-preview-docs`                                                |
+| Project label / repository       | GitHub deployment metadata / 対象GitHub repository | Vercel deployment label `vercel-study-app`。repositoryは`Stone5656/vercel-study-app`。DashboardのGit connection表示は未確認                                |
+| 最新Production deployment        | GitHub deployments API                             | SHA `79e696c83e58d6ade664615be5a39b0d982cdb72`、2026-11-18 07:01 UTC、deployment URL `https://vercel-study-dxbjgc13l-yjs-projects-e19df116.vercel.app`     |
+| 最新Preview deployment           | GitHub deployments API                             | SHA `9b6a1cab55f1c7a4bb1c1aef5d74f2cd13f2fe13`、2026-11-18 06:53 UTC、deployment URL `https://vercel-study-gbbzlv5yg-stone5656s-projects.vercel.app`       |
+| Preview protection               | 2026-11-18匿名GET（cookieなし、redirect追跡なし）  | `/`、`/ai/`、`/api/ai/history`すべてHTTP 302でVercel SSOへredirect。確認したデプロイ/pathで匿名取得できないことを確認                                      |
+| Production protection / app stop | 同Production deployment URLへの匿名GET             | `/api/ai/history`はHTTP 302でSSOへredirect。アプリに到達せず、Productionの`DEMO_DISABLED`応答は実環境で未確認。POSTは行っていない                          |
+| Dashboard settings               | Vercel authenticated Dashboard/CLI                 | Project settingsを読み取る認証済み手段がなく、Node.js runtime、Fluid Compute、Function実効maxDuration、Protection method/scope/例外、canonical URLは未確認 |
+| Environment variable scopes      | 値を表示しないread-only Dashboard参照              | Dashboardにアクセスできず、変数名の有無・Preview/Production scopeとも未確認。`vercel env pull`は未使用                                                     |
+| local secret file                | filename/tracking/ignore metadata only             | `.env`は存在するが内容を開いていない。Git追跡対象ではなくignoreされる                                                                                      |
+
+GitHub deployment metadataはdeployment SHAとProject labelを示すだけで、Vercel Project SettingsのNode/runtime/secret/protection設定を証明しない。公式の一般設定情報は[`spec.md`](spec.md)に記し、Project個別値は推定していない。
+
+| Environment variable | Vercelでの登録                                                       | Preview / Production scope                             |
+| -------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
+| `AI_DEMO_ENABLED`    | 未確認                                                               | 未確認                                                 |
+| `AI_MOCK_ENABLED`    | 未確認                                                               | 未確認                                                 |
+| `GEMINI_API_KEY`     | 未確認（値は取得していない）                                         | 未確認                                                 |
+| `GEMINI_MODEL`       | 未確認                                                               | 未確認                                                 |
+| `DATABASE_URL`       | 未確認（値は取得していない）                                         | 未確認                                                 |
+| `VERCEL_ENV`         | プラットフォーム提供のシステム変数だが対象deploymentでの実値は未確認 | deployment runtime内でのProduction/Preview判定は未観測 |
+
+### 最終コマンド（Node v26.13.0 / pnpm 12.8.1 / Chromium、ローカル作業環境）
+
+| コマンド                                                                                                                       | 結果                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm lint`                                                                                                                    | 成功                                                                                                                       |
+| `pnpm typecheck`                                                                                                               | 成功                                                                                                                       |
+| `pnpm format:check`                                                                                                            | 最終実行成功。初回の`requirements.md`差分をPrettierで修正後に再実行                                                        |
+| `pnpm test`                                                                                                                    | 成功、70 tests / 9 suites（pass 70 / fail 0 / skip 0）。Production guardを含み、TODO V1/V2 server tests成功                |
+| `pnpm build`                                                                                                                   | 成功                                                                                                                       |
+| `git diff --check`                                                                                                             | 成功                                                                                                                       |
+| `pnpm exec playwright test tests/e2e/ai-history.spec.ts tests/e2e/ai-ask.spec.ts --output=/tmp/vercel-study-ai-task08-results` | 成功、37/37 Chromium tests（37 passed / 0 failed）。page.route mock、実Gemini/Neon通信なし                                 |
+| 静的秘密/UI確認                                                                                                                | Git追跡`.env`なし、local `.env` ignored、`public/`にGemini/DB/SDK識別子なし、AI UIに`innerHTML`代入なし、`vercel.json`なし |
+
+credential-shaped patternの静的scanでは、DBエラー漏えいテスト中のplaceholder PostgreSQL URIだけが一致した。これはテストfixtureであり、値は表示・転記していない。`.env`はignore/tracking metadataだけを確認して内容を読んでいない。
+
+必須コマンド一式はPrettier適用後に再実行し、すべて成功した。環境はLinux、Node v26.13.0、pnpm 12.8.1、Playwright Chromium。Playwright outputは`/tmp`へ保存し、root所有`test-results/`には触れていない。実DB依存TODO E2Eは実行していない。
+
+### 結論と未実施
+
+- SupertestのProduction testでは`VERCEL_ENV=production`と`AI_DEMO_ENABLED=true`でPOST/GETとも503 `DEMO_DISABLED`、AI Service/Model呼出し0回を確認。TODO server testsも成功。これは実ProductionへのHTTP確認ではない。
+- Preview匿名GETは確認deployment URL上で保護されていたが、例外一覧/canonical aliasは未確認。Vercel設定詳細が未確認なのでPreview AIを有効化してよいとは判定しない。
+- Gemini HTTP request timeout 30秒にNeon INSERTと応答時間が加算される。Browser POST 45秒 / history GET 15秒はFunction execution durationと別。Function上限が不明なため時間整合性は未判定。
+- 実Gemini、実Neon DDL/INSERT/SELECT、DB依存E2E、Preview/Productionアプリ応答は未実施。実施済み扱いにしない。
+- Neon SQLは静的レビューのみ。CHECK式は`pg_get_constraintdef`、PK列、index列/順序/方向は`pg_get_indexdef`/`pg_index`、`created_at` defaultは`pg_get_expr`で照合し、同名オブジェクト不一致時に停止する必要がある。SQL実行はしていない。
+
 ## 4. TASK-01変更後（2026-11-18）
 
 | 項目                | 結果                                       |

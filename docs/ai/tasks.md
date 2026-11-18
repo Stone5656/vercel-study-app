@@ -89,9 +89,9 @@
 
 - 対応ID: REQ-AI-009, 012, 014, 016 / DES-AI-010
 - 変更対象: README、`docs/ai/*`
-- 理由: Preview保護・環境上限・運用手順を実環境で確認するため
-- 実装: 保護状態確認後のPreview限定有効化手順、Production停止確認、提出記録
-- 確認コマンド: Vercel設定の読み取り確認、Preview手動試験（事前承認後）
-- 期待結果: Previewだけが条件付きで利用可能、Productionは503
-- 実測結果: 未実施
-- 未検証: 履歴削除/保存期間（仕様未決）
+- 理由: Preview保護・環境上限・運用手順を確認し、提出用記録を整備するため
+- 実装: 匿名GETでPreview/Production deployment URLの保護を確認し、Dashboard未確認の設定と安全な確認手順を明記。README、要件/設計/試験/提出資料を更新
+- 確認コマンド: `curl`による匿名GETのみ、GitHub deployment metadata読み取り、Production guard Supertest、最終pnpm検証とAI Playwright
+- 期待結果: 観測した事実と未確認項目を分離し、Preview AIの有効化条件を明確化
+- 実測結果: Previewの`/`, `/ai/`, `/api/ai/history`とProduction deploymentの`/api/ai/history`は匿名GET時に302でVercel SSOへredirect。PR #8 merged、Production deployment SHA `79e696c…`、Preview deployment SHA `9b6a1ca…`。Supertestの実測は下記`test-results.md`に追記
+- 未検証: Dashboard上の接続repository詳細、Node.js runtime、Fluid Compute、実効`maxDuration`、環境変数scope、protection exception、canonical URL、実Gemini/Neon/DB E2E、履歴削除/保存期間
