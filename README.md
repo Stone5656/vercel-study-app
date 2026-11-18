@@ -52,7 +52,7 @@ Preview と Production は別々の Vercel デプロイ環境で、環境変数�
 
 必要な環境変数名は`AI_DEMO_ENABLED`、`AI_MOCK_ENABLED`、`GEMINI_API_KEY`、`GEMINI_MODEL`、`DATABASE_URL`です。値をGitやブラウザへ含めないでください。
 
-- ローカル模擬回答: `AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=true`を設定し、`VERCEL_ENV`は設定しないでください。
+- ローカル模擬回答: `AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=true`を設定し、`VERCEL_ENV`は設定しないでください。`AI_MOCK_ENABLED=true`が模擬するのはGeminiへの通信だけです。質問・回答の保存には引き続き`DATABASE_URL`、接続可能なNeon PostgreSQL、`ai_qa_logs`テーブルとINSERT権限が必要です。DB未設定またはDDL未適用の場合、質問送信は保存成功（HTTP 201）になりません。現在DDLは既存制約・index定義の照合が未解決のため、レビュー・承認前に実DBへ適用しないでください。
 - ローカルGemini: `AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=false`、`GEMINI_API_KEY`、`GEMINI_MODEL=gemini-3.5-flash-lite`、`DATABASE_URL`を設定してください。実リクエストはAPI利用料・DB書き込みを伴います。承認済みDDLの適用後に、手動で少数回だけ実施してください。
 
 設定後に`pnpm dev`を起動します。自動検証は`pnpm lint`、`pnpm typecheck`、`pnpm format:check`、`pnpm test`、`pnpm build`と、AI UIのPlaywrightテストで行います（下のコマンド一覧を参照）。
