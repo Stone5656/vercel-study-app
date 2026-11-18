@@ -3,6 +3,7 @@
 import express, { type Request, type Response } from 'express';
 
 import path from 'node:path';
+import { createAiRouter } from './apps/ai/aiRouter.js';
 import { requirePool } from './db.js';
 import {
   createTodoRouter,
@@ -23,6 +24,11 @@ app.use(
     extended: true,
   }),
 );
+
+// AI routes must be mounted before the shared JSON parser so that their
+// dedicated 16 KiB parser can be added without changing the TODO APIs.
+app.use(createAiRouter());
+
 app.use(express.json());
 
 app.use(createTodoRouter());
