@@ -1,0 +1,164 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  color: #1f2937;
+  background: #f3f5f8;
+}
+
+body {
+  margin: 0;
+  padding: 32px 16px;
+}
+
+.ai-app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px;
+  background: #fff;
+  border: 1px solid #d9dee7;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(31 41 55 / 6%);
+}
+
+.page-header {
+  margin-bottom: 28px;
+}
+
+.page-header h1 {
+  margin-bottom: 0;
+}
+
+.back-link {
+  color: #155eef;
+}
+
+.question-panel,
+.history-panel {
+  padding: 20px 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+fieldset {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  font: inherit;
+}
+
+button {
+  justify-self: start;
+  padding: 9px 16px;
+}
+
+#submit-status:empty {
+  display: none;
+}
+
+#submit-status[data-state='error'] {
+  color: #a32121;
+}
+
+#submit-status[data-state='warning'] {
+  color: #684c00;
+}
+
+#submit-status[data-state='success'] {
+  color: #1b6e36;
+}
+
+#submit-status[data-state='loading'] {
+  color: #3b4b65;
+}
+
+.answer-panel {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #b8d6c0;
+  border-radius: 8px;
+  background: #f3faf5;
+}
+
+.answer-panel h3 {
+  margin-top: 0;
+}
+
+.answer-panel p {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.answer-panel time {
+  display: block;
+  margin-top: 14px;
+  color: #596579;
+  font-size: 0.9rem;
+}
+
+.muted {
+  color: #596579;
+}
+
+#history-status:empty {
+  display: none;
+}
+
+#history-status[data-state='error'] {
+  color: #a32121;
+}
+
+#history-status[data-state='disabled'] {
+  color: #684c00;
+}
+
+.history-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-item {
+  padding: 16px;
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+}
+
+.history-item h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.history-item p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.history-item .answer {
+  margin-top: 14px;
+}
+
+.history-item time {
+  display: block;
+  margin-top: 14px;
+  color: #596579;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 520px) {
+  body {
+    padding: 12px;
+  }
+
+  .ai-app {
+    padding: 18px;
+  }
+}

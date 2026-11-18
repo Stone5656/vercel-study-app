@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="AIへの質問と保存済みの回答履歴を確認できます。"
+    />
+    <title>AI質問アプリ</title>
+    <link rel="stylesheet" href="/ai/style.css" />
+    <script src="/ai/app.js" defer></script>
+  </head>
+  <body>
+    <main class="ai-app">
+      <header class="page-header">
+        <a class="back-link" href="/">← TOPへ戻る</a>
+        <h1>AI質問アプリ</h1>
+      </header>
+
+      <section class="question-panel" aria-labelledby="question-title">
+        <h2 id="question-title">質問する</h2>
+        <form id="question-form">
+          <fieldset id="question-fields">
+            <label for="prompt">質問本文</label>
+            <textarea id="prompt" name="prompt" rows="4"></textarea>
+            <button type="submit">質問を送信</button>
+          </fieldset>
+        </form>
+        <p id="submit-status" role="status" aria-live="polite"></p>
+        <section
+          id="answer-panel"
+          class="answer-panel"
+          aria-labelledby="answer-title"
+          hidden
+        >
+          <h3 id="answer-title">最新の回答</h3>
+          <h4>質問</h4>
+          <p id="answer-prompt"></p>
+          <h4>回答</h4>
+          <p id="answer-response"></p>
+          <time id="answer-created-at"></time>
+        </section>
+      </section>
+
+      <section class="history-panel" aria-labelledby="history-title">
+        <h2 id="history-title">質問履歴</h2>
+        <p id="history-status" role="status" aria-live="polite"></p>
+        <div id="history-content" aria-busy="false">
+          <ol id="history-list" class="history-list"></ol>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

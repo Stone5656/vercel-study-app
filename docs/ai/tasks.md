@@ -54,19 +54,19 @@
 - 実装: TOP導線、履歴GET、0件表示、textContent描画
 - 確認コマンド: pnpm検証一式、Playwright
 - 期待結果: T02, T03, T14がモック/E2Eで成功
-- 実測結果: 未実施
-- 未検証: Preview表示
+- 実測結果: TASK-05実装済み。AI履歴UI専用Playwright 15件で静的画面、モック履歴、エラー/停止状態、安全な描画を確認（コマンド実行結果は`test-results.md`に記録）
+- 未検証: 実Neonへの永続化と実データの再読込、Preview表示。質問送信はTASK-06へ持ち越し
 
 ## TASK-06 質問送信UI
 
 - 対応ID: REQ-AI-001, 007, 008, 016 / DES-AI-008, 009
 - 変更対象: `public/ai/index.html`, `public/ai/app.js`, E2E tests
 - 理由: 非同期送信の状態と失敗時UXを実装するため
-- 実装: 待機、連打防止、45秒、JSON構造検証、入力保持/消去、finally復帰
+- 実装: trim/コードポイント/本文byte検証、非同期POST、待機と連打防止、201 DTO検証、既知エラー固定文、45秒timeout、成功後の回答表示と履歴更新、GET失敗と送信成功の分離
 - 確認コマンド: pnpm検証一式、Playwright
-- 期待結果: T12, T13, T14が成功
-- 実測結果: 未実施
-- 未検証: 実回線timeout時の保存状態
+- 期待結果: UI15〜UI31とTASK-05 UI01〜UI14がE2E mockで成功
+- 実測結果: 実装済み。Playwright 32/32件、server tests 68件成功
+- 未検証: 実Gemini/Neon/Vercelでの送信、実回線timeout時における保存状態
 
 ## TASK-07 異常系・回帰テスト
 
