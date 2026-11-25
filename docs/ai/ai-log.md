@@ -1,5 +1,24 @@
 # AI活用記録
 
+## 2026-11-18 TASK-08
+
+### 作業状態と読み取り確認
+
+- PR #8がmainへmerge済みであることをGitHub APIで確認し、`origin/main` / HEAD `79e696c83e58d6ade664615be5a39b0d982cdb72`から`feature/ai-task-08-preview-docs`を作成した。
+- 開始時からの`.devcontainer/Dockerfile`差分（pnpm version行）を維持し、変更しなかった。
+- GitHub deployment metadataではProject label `vercel-study-app`、Production SHA `79e696c83e58d6ade664615be5a39b0d982cdb72`、Preview SHA `9b6a1cab55f1c7a4bb1c1aef5d74f2cd13f2fe13`を確認した。Vercel Dashboard/CLIの認証済みread-only設定参照は利用できなかった。
+- Preview deploymentの`/`、`/ai/`、`/api/ai/history`にcookieなしGETし、各HTTP 302とVercel SSO redirectを確認した。Production deploymentの`/api/ai/history`も302/SSO。GETだけでありPOSTやGemini呼出しを行っていない。
+- 確認したURL/pathで匿名利用は遮断された。一方、Protection exception一覧、canonical Preview alias、Dashboard上のmethod/scopeは未確認のため、PreviewのAI機能を有効化できるという結論にはしていない。
+- `.env`ファイルの存在はファイル名のみで検出したが、内容は読んでいない。tracked `.env`はなく、Git管理対象の設定ファイルから秘密値を得る操作も行っていない。Vercel環境変数名の登録/scopeは未確認。
+- credential-shaped pattern scanはDBエラー秘匿テスト中のplaceholder PostgreSQL URIだけに一致した。fixtureとして判定し、URI内容は報告・保存していない。その他の追跡ファイルにcredential-shaped一致はなかった。
+
+### 判断
+
+- Gemini HTTP timeout 30秒にNeon INSERTとHTTP応答時間が加算される。Browser POST 45秒と履歴GET 15秒は別のclient-side deadline。対象Vercel Functionの実効上限が不明なので、全処理が期限内に完了できるとは判定しない。
+- Node runtime、Fluid Compute、Function maxDurationはリポジトリの有無で推測せず未確認とした。`vercel.json`も追加していない。
+- SQLは編集/実行しない。`pg_get_constraintdef`, `pg_get_indexdef`, `pg_index`, `pg_get_expr`を含むcatalog比較を行い、同名オブジェクトの定義不一致ではDDL停止する運用手順を記録した。
+- 読み取り専用Vercel設定参照、匿名GET、静的秘密管理確認、Production guard testを区別して記録し、実Gemini/Neonの結合試験は別状態とした。
+
 ## 2026-11-18 TASK-07
 
 ### 修正・確認
