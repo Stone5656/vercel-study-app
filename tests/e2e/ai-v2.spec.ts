@@ -286,17 +286,30 @@ test('distinguishes a disabled API from an empty conversation list', async ({
 async function setupAskPage(
   page: Page,
   handlers: {
+    create?: (route: Route) => Promise<void>;
     post?: (route: Route) => Promise<void>;
     getTurns?: (route: Route, call: number) => Promise<void>;
   } = {},
 ): Promise<{ getTurnsCalls: () => number }> {
   let getTurnsCalls = 0;
-  await page.route('**/api/ai/v2/conversations', (route) =>
-    route.fulfill({
+  await page.route('**/api/ai/v2/conversations', async (route) => {
+    if (route.request().method() === 'POST') {
+      if (handlers.create) {
+        await handlers.create(route);
+      } else {
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, item: conversation(90) }),
+        });
+      }
+      return;
+    }
+    await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ success: true, items: [conversation(1)] }),
-    }),
-  );
+    });
+  });
   await page.route('**/api/ai/v2/conversations/1/turns', async (route) => {
     if (route.request().method() === 'POST') {
       await handlers.post?.(route);
@@ -479,6 +492,38 @@ test('locks the form during submission and ignores duplicate submit events', asy
   await expect(page.locator('#latest-answer-response')).toHaveText(
     'Saved response',
   );
+});
+
+test('locks conversation switching and questions while creating a conversation', async ({
+  page,
+}) => {
+  let finishCreate = (): void => undefined;
+  const createWaiting = new Promise<void>((resolve) => {
+    finishCreate = resolve;
+  });
+  let createCalls = 0;
+  await setupAskPage(page, {
+    async create(route) {
+      createCalls += 1;
+      await createWaiting;
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, item: conversation(90, 'New') }),
+      });
+    },
+  });
+  await page.locator('#conversation-title').fill('New');
+  await page.getByRole('button', { name: '会話を作成' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Conversation 1' }),
+  ).toBeDisabled();
+  await expect(page.locator('#question-prompt')).toBeDisabled();
+  await expect(page.getByRole('button', { name: '質問を送信' })).toBeDisabled();
+  expect(createCalls).toBe(1);
+  finishCreate();
+  await expect(page.locator('#conversation-title')).toHaveValue('');
+  await expect(page.locator('#question-prompt')).toBeEnabled();
 });
 
 test('retains input and maps API error codes to fixed safe messages', async ({

@@ -173,6 +173,9 @@ BEGIN
     WHERE table_schema.nspname = 'public'
       AND table_class.relname = 'ai_v2_conversations'
       AND constraint_data.contype = 'p'
+      AND constraint_data.convalidated
+      AND NOT constraint_data.condeferrable
+      AND NOT constraint_data.condeferred
       AND ARRAY(
         SELECT attribute.attname::text
         FROM unnest(constraint_data.conkey) WITH ORDINALITY AS keys(attnum, position)
@@ -189,6 +192,8 @@ BEGIN
       AND table_class.relname = 'ai_v2_conversations'
       AND constraint_data.conname = 'ai_v2_conversations_title_length_check'
       AND constraint_data.contype = 'c'
+      AND constraint_data.convalidated
+      AND NOT constraint_data.connoinherit
       AND regexp_replace(lower(pg_get_constraintdef(constraint_data.oid, true)),
         '[[:space:]()]|::text', '', 'g')
         = 'checkchar_lengthtitle>=1andchar_lengthtitle<=50'
@@ -200,6 +205,8 @@ BEGIN
       AND table_class.relname = 'ai_v2_conversations'
       AND constraint_data.conname = 'ai_v2_conversations_title_not_blank_check'
       AND constraint_data.contype = 'c'
+      AND constraint_data.convalidated
+      AND NOT constraint_data.connoinherit
       AND regexp_replace(lower(pg_get_constraintdef(constraint_data.oid, true)),
         '[[:space:]()]|::text', '', 'g')
         = 'checktitle~''[^[:space:]]'''
@@ -210,6 +217,9 @@ BEGIN
     WHERE table_schema.nspname = 'public'
       AND table_class.relname = 'ai_v2_turns'
       AND constraint_data.contype = 'p'
+      AND constraint_data.convalidated
+      AND NOT constraint_data.condeferrable
+      AND NOT constraint_data.condeferred
       AND ARRAY(
         SELECT attribute.attname::text
         FROM unnest(constraint_data.conkey) WITH ORDINALITY AS keys(attnum, position)
@@ -228,6 +238,11 @@ BEGIN
       AND constraint_data.contype = 'f'
       AND constraint_data.confrelid = 'public.ai_v2_conversations'::regclass
       AND constraint_data.confdeltype = 'r'
+      AND constraint_data.confupdtype = 'a'
+      AND constraint_data.confmatchtype = 's'
+      AND constraint_data.convalidated
+      AND NOT constraint_data.condeferrable
+      AND NOT constraint_data.condeferred
       AND ARRAY(
         SELECT attribute.attname::text
         FROM unnest(constraint_data.conkey) WITH ORDINALITY AS keys(attnum, position)
@@ -252,6 +267,8 @@ BEGIN
       AND table_class.relname = 'ai_v2_turns'
       AND constraint_data.conname = 'ai_v2_turns_prompt_length_check'
       AND constraint_data.contype = 'c'
+      AND constraint_data.convalidated
+      AND NOT constraint_data.connoinherit
       AND regexp_replace(lower(pg_get_constraintdef(constraint_data.oid, true)),
         '[[:space:]()]|::text', '', 'g')
         = 'checkchar_lengthprompt>=1andchar_lengthprompt<=2000'
@@ -263,6 +280,8 @@ BEGIN
       AND table_class.relname = 'ai_v2_turns'
       AND constraint_data.conname = 'ai_v2_turns_prompt_not_blank_check'
       AND constraint_data.contype = 'c'
+      AND constraint_data.convalidated
+      AND NOT constraint_data.connoinherit
       AND regexp_replace(lower(pg_get_constraintdef(constraint_data.oid, true)),
         '[[:space:]()]|::text', '', 'g')
         = 'checkprompt~''[^[:space:]]'''
@@ -274,6 +293,8 @@ BEGIN
       AND table_class.relname = 'ai_v2_turns'
       AND constraint_data.conname = 'ai_v2_turns_response_not_blank_check'
       AND constraint_data.contype = 'c'
+      AND constraint_data.convalidated
+      AND NOT constraint_data.connoinherit
       AND regexp_replace(lower(pg_get_constraintdef(constraint_data.oid, true)),
         '[[:space:]()]|::text', '', 'g')
         = 'checkresponse_text~''[^[:space:]]'''

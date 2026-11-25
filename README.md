@@ -69,6 +69,22 @@ Gemini設定がない状態でもアプリと既存TODOは起動しますが、A
 
 FunctionのNode.js runtime、Fluid Compute、Functionの実効`maxDuration`はVercel Dashboardを確認できず未確認です。**Settings > Build and Deployment > Node.js Version**でruntimeを、Projectの**Functions Settings > Fluid Compute**でFluid Computeを、Function詳細で実効durationを確認してください。Gemini SDKのHTTP timeoutは30秒で、DB保存と応答に別途時間が必要です。Functionの実効上限が不明の間、30秒処理が収まると判断しないでください。`vercel.json`は追加していません。
 
+## AI会話アプリ V2（ローカル開発専用）
+
+`/ai/v2/`では話題ごとの会話を作成・切替し、選択中の会話の最新20ターンを表示できます。追加質問には同一会話の保存済み最新5ターンをGeminiへ渡します。会話/ターンはV1の`ai_qa_logs`とTODO表を変更せず、V2専用`ai_v2_conversations` / `ai_v2_turns`へ保存します。
+
+V2 APIは認証を実装していないため、`NODE_ENV=development`、`AI_V2_DEMO_ENABLED=true`、`VERCEL_ENV`未設定のすべてが揃ったローカル環境だけで有効です。Preview、Production、`NODE_ENV`不明/productionなどでは、flagに関係なくAPIは503 `DEMO_DISABLED`で停止します。V2は模擬Geminiを使わず、質問には実GeminiとDBが必要です。AI V1の`AI_DEMO_ENABLED` / `AI_MOCK_ENABLED`とは別設定です。
+
+ローカル起動前に、`.env`等のGit管理外の環境へ`DATABASE_URL`、`GEMINI_API_KEY`、`GEMINI_MODEL`、`AI_V2_DEMO_ENABLED=true`を設定してください。シェルの`NODE_ENV=development`を明示し、`VERCEL_ENV`が存在しないことを確認してから`pnpm dev`を起動し、`http://localhost:3000/ai/v2/`を開きます。秘密値をコマンド履歴、画面共有、ログ、Gitへ出さないでください。キーやDB設定がない場合もアプリ/TODOは起動しますが、V2 APIはAIまたはDBエラーになります。
+
+### V2 DDLの確認・適用
+
+`sql/ai/040_create_ai_v2_tables.sql`はSQLファイルの作成と使い捨てPostgreSQL 16での新規作成/再実行/定義不一致停止を確認済みです。**実Neonへは未適用です。** Neon Consoleで対象Project、branch、databaseを確認し、現在の`ai_v2_conversations` / `ai_v2_turns`のcolumns、identity/default、constraints、PK/FK、indexesを`information_schema`とcatalog関数（`pg_get_constraintdef`、`pg_get_indexdef`、`pg_index`、`pg_get_expr`）で照合してください。スクリプト冒頭のpreflight出力を保存し、同名既存オブジェクトの定義が期待と一致しない場合は停止し、既存テーブルを変更・削除しないでください。差分レビューと承認後、Neon SQL Editorで当該ファイルのDDLを実行し、成功結果と対象branch/databaseを記録します。この手順を利用者が実施するまで、実Neon保存を確認済みとは扱いません。
+
+DDL適用後の手動確認は、ローカル限定設定でV2画面から新規会話を作成し、質問を1回送信、HTTP 201と会話一覧/履歴を確認します。その後Neonでconversation id/titleと対応するturnのprompt/responseを読み取り、画面再読込後に一覧から同じ会話を再選択して再表示されることを確認します。Gemini実呼出しはAPI料金、Neon保存は永続変更を伴うため、対象と回数を確認したうえで利用者が実行してください。この作業では実Gemini/Neon結合を再試験していません。
+
+V2の自動検証: `pnpm lint`、`pnpm typecheck`、`pnpm format:check`、`pnpm test`、`pnpm build`、`pnpm exec playwright test tests/e2e/ai-v2.spec.ts`。PlaywrightはAPIをroute mockし、実Gemini/Neonへ通信しません。
+
 ### Production運用
 
 Productionでは`VERCEL_ENV=production`により、`AI_DEMO_ENABLED=true`でも`POST /api/ai/ask`と`GET /api/ai/history`を503 `DEMO_DISABLED`で停止します。これはAI API単位の制御で、TODO V1/V2は独立しています。TASK-08ではSupertestでこの分岐を確認し、Productionデプロイの匿名GETはVercel SSOへリダイレクトされたため、アプリのProduction応答自体は確認できていません。ProductionへPOSTは行いません。

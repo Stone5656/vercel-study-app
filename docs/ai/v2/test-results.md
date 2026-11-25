@@ -54,7 +54,7 @@
 
 ## TASK-V2-07 追加質問UI（2026-11-25）
 
-- V2 Playwright route-mock suite: 16/16成功（Chromium）。既存会話管理7件を維持し、質問送信と状態テストを追加。
+- V2 Playwright route-mock suite: 17/17成功（Chromium）。既存会話管理7件を維持し、質問送信と状態テストを追加。
 - 正常201後の回答描画/入力クリア/GET再取得、POST成功後のGET障害で回答を残し警告、空白/2,001コードポイントをPOSTなしで拒否、JSON bytes検査、送信中の連打/会話選択/作成防止、既知HTTP error codeの固定文、失敗時入力保持を確認。
 - Playwright ClockでPOST 45秒、履歴GET 15秒の期限を進め、再送なし、POSTは保存結果不明を表示して入力保持、履歴timeoutでは回答保持・履歴loading解除・操作復帰を確認。
 - 不正/parse不能201とネットワーク失敗も「保存の可能性あり」として自動再送なし。質問/回答のHTML風文字列はtextContentで表示されDOM要素を生成しない。
@@ -86,3 +86,51 @@ TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共�
 - 実DBを使うTODO E2E
 
 実Neon/実Geminiの動作確認手順はREADMEと本設計に記載し、利用者の明示承認と対象環境確認後に別途行う。
+
+## TASK-V2-08 最終統合（2026-11-25）
+
+### 最終自動検証
+
+実装branchのローカルNode.js/Chromium環境で実施。すべて外部Neon/Gemini通信なし。
+
+| コマンド                                                                                                                                                        | 実測結果                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `pnpm lint`                                                                                                                                                     | 成功                                |
+| `pnpm typecheck`                                                                                                                                                | 成功                                |
+| `pnpm format:check`                                                                                                                                             | 成功                                |
+| `pnpm test`                                                                                                                                                     | 103/103成功、全server suite、fail 0 |
+| `pnpm build`                                                                                                                                                    | 成功                                |
+| `pnpm exec playwright test tests/e2e/ai-history.spec.ts tests/e2e/ai-ask.spec.ts tests/e2e/ai-v2.spec.ts tests/e2e/home.spec.ts --output=/tmp/ai-v2-task08-e2e` | 55/55成功、Chromium、fail 0         |
+| `git diff --check`                                                                                                                                              | 成功                                |
+
+V2 Playwright suiteは17/17成功。既存AI V1履歴/質問UIとTOPを含むE2E合計55件はすべてroute mockまたは静的表示で確認した。DBへ書き込むTODO V1/V2 Playwright E2Eは意図的に実行せず、既存TODOのSupertest server testsを実行して回帰確認した。
+
+### DDL試験と静的安全確認
+
+- Docker使い捨てPostgreSQL 16でDDL新規作成・再実行、同名かつ正しい式だが`NOT VALID`のCHECK制約時の停止、同名indexの列方向不一致時の停止を確認。失敗時はトランザクションrollbackされ、既存の不一致定義が保持されることを確認。
+- DDLはNeonへ適用していない。Neon branch/database catalog照合、既存データ整合性、実INSERT/履歴SELECTは未確認。
+- V2 browser HTML/JavaScriptの自動静的テストでGemini SDK、`GEMINI_API_KEY`、`DATABASE_URL`が配信コードに存在しないこと、`innerHTML`未使用と`textContent`利用を確認。
+- Supertestで全V2 APIがProduction相当環境で503 `DEMO_DISABLED`となり、Model/Service呼出0であることを確認。これはアプリmiddlewareの自動テストであり、Vercel Production実環境の確認ではない。
+
+### REQ受入状況（mock/staticと実機を分離）
+
+| REQ        | 自動検証                                                       | 実機/手動状態               |
+| ---------- | -------------------------------------------------------------- | --------------------------- |
+| REQ-V2-001 | API/Model mockで作成・trim・境界・DTO確認                      | Neon保存未確認              |
+| REQ-V2-002 | API/UI mockで一覧・切替・reload後の再取得確認                  | Neonからの再開未確認        |
+| REQ-V2-003 | Model/API/UI mockで最新20・順序・会話分離確認                  | Neon履歴未確認              |
+| REQ-V2-004 | Gemini SDK mockで同一context最新5 + current prompt確認         | 実Gemini未実施              |
+| REQ-V2-005 | Supertest/Playwrightでtitle/prompt/JSON解析/byte/codepoint境界 | 実環境未確認                |
+| REQ-V2-006 | deferred save/rollback/error/context conflict mock確認         | Neon transaction未確認      |
+| REQ-V2-007 | Playwrightで会話・送信・timeout・race状態確認                  | 実Neon UI未確認             |
+| REQ-V2-008 | DDL catalog照合とModel transaction mock確認                    | Neon未適用                  |
+| REQ-V2-009 | 静的検査・XSS Playwright route fixture・固定エラー確認         | 外部設定/デプロイ未確認     |
+| REQ-V2-010 | 全V2 endpointのProduction guard/呼出0とTODO/V1 server回帰確認  | Vercel設定/実デプロイ未確認 |
+| REQ-V2-011 | API status/codeと固定エラーのSupertest確認                     | 実環境未確認                |
+
+### 未完了の実環境試験
+
+- 利用者が対象Neon Project/branch/databaseを確認し、DDLのcatalog出力と差分をレビュー・承認してからDDLを適用する。
+- DDL適用後、ローカル専用guardの下でGemini質問を少数回実行し、保存されたturnと画面再読込後の再表示を確認する。
+- Vercel runtime/Function上限、Preview Protection、Vercel環境変数scopeは未確認。V2は公開系で停止するため、これらの確認だけでAPI有効化される設計ではない。
+- 保存期間、会話削除、ページネーション、認証/ユーザー分離は未実装/未決定。認証なしのV2 APIを公開してはならない。

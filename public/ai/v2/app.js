@@ -144,7 +144,7 @@ function renderConversationList(items) {
       'aria-current',
       String(item.id === selectedConversationId),
     );
-    button.disabled = isSubmittingQuestion;
+    button.disabled = isSubmittingQuestion || isCreatingConversation;
 
     const title = document.createElement('span');
     title.textContent = item.title;
@@ -375,7 +375,7 @@ async function loadConversations(preferredId = null) {
 }
 
 conversationList.addEventListener('click', (event) => {
-  if (isSubmittingQuestion) return;
+  if (isSubmittingQuestion || isCreatingConversation) return;
   const target = event.target;
   if (!(target instanceof Element)) return;
   const button = target.closest('button[data-conversation-id]');
@@ -404,6 +404,9 @@ conversationForm.addEventListener('submit', async (event) => {
   isCreatingConversation = true;
   createConversationButton.disabled = true;
   conversationTitleInput.disabled = true;
+  questionInput.disabled = true;
+  questionSubmitButton.disabled = true;
+  renderConversationList(currentConversations);
   setStatus(conversationStatus, 'loading', '会話を作成しています。');
   try {
     const payload = await requestJson(
@@ -433,6 +436,11 @@ conversationForm.addEventListener('submit', async (event) => {
     isCreatingConversation = false;
     createConversationButton.disabled = false;
     conversationTitleInput.disabled = isSubmittingQuestion;
+    questionInput.disabled =
+      selectedConversationId === null || isSubmittingQuestion;
+    questionSubmitButton.disabled =
+      selectedConversationId === null || isSubmittingQuestion;
+    renderConversationList(currentConversations);
   }
 });
 
@@ -468,7 +476,13 @@ function validatePrompt(value) {
 
 questionForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (isSubmittingQuestion || selectedConversationId === null) return;
+  if (
+    isSubmittingQuestion ||
+    isCreatingConversation ||
+    selectedConversationId === null
+  ) {
+    return;
+  }
 
   const validated = validatePrompt(questionInput.value);
   if (!validated) {
