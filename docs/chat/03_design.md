@@ -1,229 +1,185 @@
-# リアルタイムチャット 設計書（草案）
+# リアルタイムチャット 設計書（確定案）
 
-## 1. 設計状態
+## 1. 設計状態・Design IDs
 
-この文書は docs-only 段階の設計候補であり、DB / Vercel の適用済み設定を示さない。教材正式要望の WISH ID は未確認である。REQ は `02_requirements.md`、TASK は `04_implementation.md`、TST は `05_test_spec.md` と対応する。
+機能要件は `02_requirements.md` に確定した。教材の正式WISH原本は未取得で、WISH-CHAT-001〜005は依頼を整理した暫定ID。実Neon・Vercelの接続/route/limitに関する記述は設計方針であり、実環境での適合成功を示さない。
 
-Vercel の公式 WebSocket 機能は2026-10-20にGAとなった。Node.js/Express と Socket.IO は公式に案内されているが、配置パス、HTTP server export、プラン/Function 実効時間、デプロイルーティングはこのリポジトリでは未実測である。[Vercel WebSockets](https://vercel.com/docs/functions/websockets) [GA告知](https://vercel.com/changelog/websocket-support-is-now-generally-available)
+| DES          | 設計要素                                                         |
+| ------------ | ---------------------------------------------------------------- |
+| DES-CHAT-001 | Express/EJS/shared HTTP server/Vercel entry（§2）                |
+| DES-CHAT-002 | Socket events、validation、admission・failure state（§3〜4, 10） |
+| DES-CHAT-003 | 投稿/履歴DB transaction・DTO・read-after-write（§5）             |
+| DES-CHAT-004 | 共有5 seat、lease/fencing、切断と回収（§6）                      |
+| DES-CHAT-005 | Postgres Adapter、配信可観測性・障害復旧（§7）                   |
+| DES-CHAT-006 | EJS画面、状態、再接続、重複排除（§2〜4, 9）                      |
+| DES-CHAT-007 | Vercel実行時間・WebSocket transport・Neon接続容量（§8）          |
+| DES-CHAT-008 | fail-closed公開制御と安全性（§10）                               |
 
-### Design IDs
+VercelのWebSocket機能は2026-10-20にGA。Node.js/Expressでは`createServer(app)`へSocket.IOをattachしserverをFunction entryとしてexportする公式例がある。Socket.IO clientはFunction URL下のpathと`transports: ['websocket']`を使う。Vercel WebSocketは接続中Functionへpinされるが、次のconnection/reconnectが同一instanceへ行く保証はなく、Function最大時間で閉じる。[Vercel WebSockets](https://vercel.com/docs/functions/websockets) [GA告知](https://vercel.com/changelog/websocket-support-is-now-generally-available)
 
-| DES          | 設計要素                                                               |
-| ------------ | ---------------------------------------------------------------------- |
-| DES-CHAT-001 | Express / shared HTTP server / Vercel entry と静的画面統合（§2, 7）    |
-| DES-CHAT-002 | Socket lifecycle、event/ack、安全な入力・公開停止境界（§3, 4, 10, 11） |
-| DES-CHAT-003 | 投稿・履歴のDB schema、transaction、DTO、history/live merge（§5, 9）   |
-| DES-CHAT-004 | 共有5席 atomic lease、fencing token、異常終了回収（§5, 10）            |
-| DES-CHAT-005 | 複数インスタンスadapter比較・選択・配送失敗窓（§5, 6）                 |
-| DES-CHAT-006 | Browser UI、再接続、状態・履歴同期・重複排除（§4, 5, 9, 10）           |
-| DES-CHAT-007 | Vercel Function lifecycle/transport/Neon Pool接続運用（§7, 8）         |
-| DES-CHAT-008 | Chat専用fail-closed公開制御、security constraints（§10, 11）           |
+## 2. アプリ統合とファイル構成
 
-WISH → REQ → DES → TASK → TST の全対応表は `02_requirements.md` のトレーサビリティ表に記載する。
-
-## 2. 現行構成・変更方針
-
-- `src/app.ts` は既存 Express app を構築/exportし、`public/` static と既存機能 Router を保持する。
-- `src/server.ts` の `app.listen()` は Socket.IO と共用できない。共通 `node:http` server を一つ作り、その server に Socket.IO `Server` を attach する構成へ移行する。ローカルは同じ server を listen。
-- Vercel Function は接続を受理した Function instance に固定する。Vercel の Node server framework 例に沿うなら、`createServer(app)` と Socket.IO を持つサーバーを Function handler として export する必要がある。Socket.IO path は Function URL と整合させる。現在の `src/server.ts` の `listen()` をそのまま Function entry とみなさない。
-- Vercel は Function route と Socket.IO path の対応を要求する。単一の Express app の既存 `/`, `/todo`, `/ai` 等の経路を保つ Vercel routing と `api/...` export 方法を、最小の route mapping を含めて staging で検証する。必要性を確認する前に設定を追加しない。Zero Configuration が WebSocket path を処理すると推測しない。
-- `/chat/` は `public/chat/index.html` を静的配信する案。Express static directory index が `/chat` から `/chat/` を処理することは実装前にローカルで実測し、必要なら明示ルートを追加する。Socket client JS は静的 HTML から Socket.IO client を読み込むが、配信元・版をサーバーと一致させる。
-- 既存 `/api` と AI/TODO の middleware order、404/error契約は変えない。Socket handshake と chat event handler の公開停止を独立して fail-closed にする。
-
-### 候補ファイル構成
+既存 `src/app.ts` はExpress routes/static/EJSを持つappとして維持する。`src/server.ts` の `app.listen()` は直接使わず、`node:http` `createServer(app)` を一度だけ生成し、Socket.IO `Server` をattachする。ローカルはこのHTTP serverをlistenする。
 
 ```text
 src/
-  app.ts                         # 既存 Express app; 最小変更
-  server.ts                      # local listen only
-  httpServer.ts                  # node:http server + Socket.IO attach/factory
+  app.ts
+  server.ts                         # shared httpServer をlisten
+  httpServer.ts                     # createServer(app), Socket.IO初期化
   apps/chat/
-    chatRouter.ts                # 必要なHTTP health/entry routeがある場合のみ
-    chatController.ts            # event境界からserviceへ渡す薄い制御
-    chatService.ts               # 入室・検証・保存後broadcastの順序
-    chatModel.ts                 # parameterized SQL、transaction、DTO
-    chatMiddleware.ts            # fail-closed環境/handshake gate
-    chatSocket.ts                # socket lifecycle / event registration
-    chatTypes.ts                 # event、ack、DTO
-public/chat/
-  index.html
-  app.js
-  style.css
-sql/chat/
-  050_create_chat_tables.sql     # 追加DDLの候補。実行・作成は後続タスク
+    chatRouter.ts                   # GET /chat
+    chatController.ts               # EJS render / socket request boundary
+    chatService.ts                  # join/send/expiry/adapter orchestration
+    chatModel.ts                    # transaction / fixed parameterized SQL
+    chatMiddleware.ts               # chat専用fail-closed gate
+    chatSocket.ts                   # event bind, lifecycle, per-socket serialization
+    chatTypes.ts                    # DTO, event/ack types
+views/chat/index.ejs
+public/chat/chat.js
+public/chat/chat.css
+sql/chat/050_create_chat_tables.sql
+sql/chat/051_create_chat_adapter.sql # adapter tableが必要な場合の候補
 tests/server/chat-*.test.ts
 tests/e2e/chat.spec.ts
+tests/integration/chat-multi-process.test.ts
 ```
 
-Socket.IO adapter 用補助テーブルを使うなら同じSQLへ含めるか、番号付きの次ファイルへ分けるかは adapter のDDLとレビュー後に決定する。既存テーブルに対する変更/削除はしない。
+`GET /chat` は `chatRouter.ts` → `chatController.ts` → `res.render('chat/index', ...)` を通す。`/chat/` aliasは同Routerから同じrenderへ向けることを候補とし、EJS資産はExpress staticで配信。ユーザー名/コメントは`textContent`で描画する。
 
-## 3. コンポーネント責務
+Vercel Node frameworkの公式例はFunction file（例`api/server.ts`）からHTTP serverをexportする方式。現行root Express deploymentにFunction entryを併存させる際のroute競合を、`/`, TODO, AI, `/chat`, socket handshakeを含むprotected Previewで実測する。必要ならFunction routing設定を追加提案するが、Zero Configで全pathとupgradeが届くとは推測しない。実効routeが判明するまではchat gateを停止にする。
 
-| コンポーネント            | 責務                                                                                                     |
-| ------------------------- | -------------------------------------------------------------------------------------------------------- |
-| app                       | 既存 Express routes/static/EJS。chat pageへの追加は必要最小限                                            |
-| shared HTTP server        | ExpressとSocket.IOの同じ Node HTTP server。localとVercel entryで共用                                     |
-| Socket router/gate        | path/handshakeと公開停止を確認。停止時はイベント登録/履歴/DBを実行しない                                 |
-| Socket controller/handler | payload型確認、ackを一度返す、service呼出し。HTTP Responseには依存しない                                 |
-| Service                   | admission → join/history、参加検査 → validation → DB transaction → adapter broadcast/ackという順序を管理 |
-| Model                     | Neonへの固定・parameterized SQL、transaction、DB値からDTO変換。Socket/HTTPへ直接応答しない               |
-| browser client            | 接続状態、join/rejoin、送信、history/new event のID dedupe・order、textContent描画                       |
-| shared seat store         | 全 Function instance 合計の最大5 leaseを原子的に割当・更新・解放                                         |
-| Socket.IO adapter         | instance間のroom event伝搬。単独では共有席数や永続履歴を管理しない                                       |
+## 3. Socket.IO event契約
 
-チャットは参加者同士のテキスト機能であり、Gemini SDK/AI serviceを呼ばない（REQ-CHAT-018）。
+全payloadはobjectであること、必須field、型、許可field、UTF-8 JSON byte長を検証。最大payloadは16,384 bytes。Socket.IO serverの`maxHttpBufferSize`も16 KiBに下げ、event boundaryでも再確認する。
 
-## 4. HTTPとSocket.IO契約案
+| Direction / event               | Payload                            | Ack / behavior                                                                                                                                             |
+| ------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client `chat:join`              | `{ username: string }`             | 成功: `{ok:true, roomId:'lobby', messages: ChatMessage[], occupied:number, capacity:5, leaseToken:string}`。二重joinは同socketの既存有効seat/historyを返す |
+| Client `chat:message:send`      | `{ comment:string }`               | 保存commit成功後 `{ok:true, message:ChatMessage, delivery:'published'                                                                                      | 'unconfirmed'}`。deliveryは全client受信保証を意味しない |
+| Client `chat:history:sync`      | `{ afterId?: string }`             | join済み/lease有効をDB transaction確認してから最新20件またはafterId差分を返す                                                                              |
+| Client `chat:leave`             | `{}`                               | idempotent release; disconnectでも同じ解放関数を呼ぶ                                                                                                       |
+| Server `chat:message:new`       | `ChatMessage`                      | 有効leaseのSocket IDだけをAdapter経由で対象にする。送信者も含む                                                                                            |
+| Server `chat:delivery:degraded` | `{ reason:'ADAPTER_UNAVAILABLE' }` | UIは保存有無とlive delivery未確認を分けて表示し、history syncを実施                                                                                        |
+| Server `chat:room:status`       | `{ occupied:number, capacity:5 }`  | DBでseat変更を確認できたときのみ通知                                                                                                                       |
 
-### HTTP
+`ChatMessage = { id:string, username:string, comment:string, createdAt:string }`。`id`は正の10進BIGINT文字列。ack/event両方の同じidはbrowserでupsert/dedupe。
 
-| Method / path       | 用途                                                                              |
-| ------------------- | --------------------------------------------------------------------------------- |
-| `GET /chat/`        | 静的チャット画面。API停止中も表示だけ可能にする案                                 |
-| Socket.IO handshake | 専用path（Vercel上の `api/<function>/socket.io` と整合）。公開停止時はupgrade拒否 |
-| その他              | 既存404を維持。chat投稿をREST APIで重複実装しない                                 |
+error ackは `{ok:false,error:{code,message}}` で、固定安全文だけを返す。主なcode: `DEMO_DISABLED`, `ROOM_FULL`, `VALIDATION_ERROR`, `PAYLOAD_TOO_LARGE`, `NOT_JOINED`, `DB_UNAVAILABLE`, `ADAPTER_UNAVAILABLE`, `DELIVERY_UNCONFIRMED`, `INTERNAL_ERROR`。例外/SQL/接続情報は返さない。満席は自動再試行せず利用者が再操作。
 
-### Client → Server event と ack
+## 4. Client状態と履歴同期
 
-すべてのeventでJSON object、必須field型、最大payload bytesを確認。message eventは入室済みかをDB/leaseでも照合する。
+接続状態 `DISCONNECTED → CONNECTING → JOINING → JOINED`; join rejectは`FULL/DISABLED/ERROR`として表示。socket切断後は送信を止める。自動送信再試行なし。Socket.IO reconnect後は新connectionとしてjoin、seat取得、history再取得を必ず行う。
 
-| Event                   | Request payload        | Ack成功                                                                              | 主なエラー                                                                                  |
-| ----------------------- | ---------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `chat:join`             | `{ username: string }` | `{ ok:true, roomId:'lobby', messages: ChatMessage[], occupied: number, capacity:5 }` | `DEMO_DISABLED`, `VALIDATION_ERROR`, `ROOM_FULL`, `DB_UNAVAILABLE`                          |
-| `chat:message:send`     | `{ comment:string }`   | `{ ok:true, message:ChatMessage }` — DB commit後のみ                                 | `NOT_JOINED`, `VALIDATION_ERROR`, `PAYLOAD_TOO_LARGE`, `DB_UNAVAILABLE`, `ROOM_UNAVAILABLE` |
-| `chat:leave` (optional) | `{}`                   | `{ ok:true }`                                                                        | cleanupは冪等。disconnectでも同処理                                                         |
+join historyはSQLで最新20件を `(created_at DESC,id DESC)` で取得し、wireでは古い順に返す。history sync中のbroadcastとhistory responseはID mapにmergeし、日時とnumeric BIGINT orderでsortし、最新20件にtrim。`afterId` query/limitが履歴gapを取りこぼさないよう、次段落の固定20件 snapshot syncも定期的に行う。
 
-Server → Client `chat:message:new` は `{ id:number|string, username:string, comment:string, createdAt:string }`。DB ID型が BIGINT なら JS `number` の安全整数を越え得るため、**idは10進文字列**とする候補を推奨。現行依頼はID型を指定していないので、最終DTO型は実装前に採択する。
+各joined socketは10秒間隔で `chat:history:sync` を要求する案を採用。これはPostgres Adapterの一時障害/通知欠落を最大おおむね10秒の追加読込周期で再照合するための、5-seatスコープで許容可能な負荷設計値。`afterId`だけだと途中のid順序・ID commit逆転を取りこぼす可能性があるため、syncは最新20 snapshotを取得する。周期は遅延/負荷測定で再評価する。DB障害時は失敗表示、次の通常周期で1回再確認（短時間の自動retry loopではない）。
 
-エラーackは `{ ok:false, error:{ code, message } }` の固定文。候補 code は `DEMO_DISABLED`, `ROOM_FULL`, `NOT_JOINED`, `VALIDATION_ERROR`, `PAYLOAD_TOO_LARGE`, `DB_UNAVAILABLE`, `ROOM_UNAVAILABLE`, `INTERNAL_ERROR`。内部例外・SQL・接続文字列・stackは返さない。
+## 5. PostgreSQL schema / transaction
 
-## 5. DB・共有席設計案
+### `chat_messages`
 
-### 投稿履歴
+`id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY`, `room_id TEXT NOT NULL CHECK (room_id='lobby')`, `username TEXT NOT NULL`, `comment TEXT NOT NULL`, `created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`. DB CHECKはtrim後のchar_lengthを確認し、TypeScript `Array.from(trimmed).length` と同じUnicode codepoint長になるPostgreSQL文字数関数をdisposable PostgreSQLで照合する。index候補は `(room_id,created_at DESC,id DESC)`。
 
-候補 `chat_messages`: DB identity key, `room_id`, `username`, `comment`, `created_at timestamptz default current_timestamp`; index `(room_id, created_at DESC, id DESC)`. `id` は長期採番を考慮して `BIGINT GENERATED ALWAYS AS IDENTITY` を候補とする。`username` と `comment` の空白/コードポイント制約は TypeScript と SQL で一致させ、SQLだけを正としない。日時同一時は ID を tie-breaker とする。
+### `chat_room_seats`
 
-入室履歴は DB query `ORDER BY created_at DESC, id DESC LIMIT 20` 後に応答用を昇順へ反転。履歴取得と live event が競合するため、browser は ID keyed map/upsert後に `(createdAt,id)` 順にし、最大20件へ trim。DB IDを文字列で選ぶ場合は数値比較でなく DB order または BigInt比較を使う。
+`room_id='lobby'`、`slot_no SMALLINT CHECK 1..5`の計5行をDDLで用意。各slotに nullable `connection_id UUID`, `socket_id TEXT`, `lease_token UUID`, `expires_at TIMESTAMPTZ`。`PRIMARY KEY(room_id,slot_no)`、active connection idのunique partial index。runtime roleにslot追加/削除権限を与えない方針を試験する。
 
-### Seat / lease
+### `socket_io_attachments`
 
-クライアント内メモリの count、Socket.IO room人数、Postgres adapter は全体定員保証に使えない。候補 `chat_room_seats` は単一 room の固定 slot 1〜5を持ち、各 row に socket/lease owner token と `expires_at` を記録する。参加時は PostgreSQL transactionでseat rowを lockし、空または期限切れ1 slotのみ取得。DB clock の `CURRENT_TIMESTAMP` を基準とする。5 slotを超える insert を通常 runtime role に許さず、table accessを最小権限にする。
+Socket.IO Postgres Adapterが8KBを超える/binary event用にauxiliary payload tableを使うため、公式adapter optionのtableNameを専用 `chat_socket_io_attachments` にする。正確なDDLは採用package versionの公式例とsourceをレビューして`051`に固定し、adapter packageによる暗黙DDLに依存しない。Adapter接続poolと通常SQL用共有 `requirePool()` は分離。
 
-- graceful disconnect/leave は一致する fencing token を条件に解放し、繰返し可能にする。
-- 生存 connection は Socket.IO heartbeatとは独立した lease renewal を行う。renewに失敗・DB不明なら投稿と新規参加を止め、seatが確保されたと見なさない。
-- abrupt process termination は `expires_at <= CURRENT_TIMESTAMP` のseatを次の割当で回収する。期限切れまでは一時的に「満席」と誤る方向を選び、定員超過を避ける。lease length/renew frequency/heartbeatとの関係は未確定。
-- 2プロセス同時参加は同一seat rowsをtransaction lockし、一方だけが最後のslotを得る。固定slot seed/再実行/欠損時の停止条件を DDL testする。
+### Seat lease/time rationale
 
-### 投稿と配信順序
+- Lease TTL 30s、renew every 5s (requirements §3)。5s renewは1回程度のquery遅延を吸収し、30s TTLでabrupt process lossのstale occupancyを有限化する。lease recovery worst-case delay is up to TTL (plus next admission attempt); full condition is fail-safe.
+- Renew uses DB clock, batch update by active connection UUID + fencing token. Renewal query count at five active clients is at most one per process every 5s if batch; never one timer/query per client.
+- Fencing token is fresh random UUID for each new claim. Release/update requires room, slot, connection UUID and same token; stale completion cannot touch a later lease.
 
-1. socket が参加済みか、room/lease/fencing tokenが有効か共有DBで確認。
-2. payloadをtrim/validate。
-3. transactionでINSERT ... RETURNING。transaction commit完了を確認。
-4. commit後に `io.to(room).emit('chat:message:new', dto)`。
-5. senderにも room broadcastで同じIDを通知する。clientはackとbroadcast双方が届いてもID upsertで一件にする。
-6. INSERT/commit失敗時はemitせず安全な `DB_UNAVAILABLE` ack。保存後、adapter broadcastに失敗する障害窓では履歴再読込で回復する設計が必要。完全な再配信保証が要求される場合はTransactional Outboxと独立publisherが必要で、Function内の短命バックグラウンド処理だけに依存できない。
+### Atomic admission / renewal
 
-### V2 connection separation
+Each `chat:join` is serialized per socket in-process with `socket.data.joinPromise`, and DB is authoritative across processes. In one transaction:
 
-履歴は `room_id='lobby'` のチャットテーブルだけから読む。AI V1/V2 の会話/履歴を取得・送信しない。V2の `ai_v2_conversations`、`ai_v2_turns` とTODOテーブルへ chat用DDLから触れない。
+1. Lock the room's five slot rows in deterministic `slot_no` order.
+2. If same `connection_id` owns an unexpired lease, renew/return that exact slot/token (idempotent duplicate join).
+3. Else take first free/expired slot using row lock; replace old owner/token with new UUID/token and DB-clock `expires_at=now()+30s`.
+4. Count valid leases with `expires_at > DB now`; commit. If none is available, `ROOM_FULL`.
 
-## 6. 複数インスタンス方式比較
+No separate counter is source of truth; fixed five rows make >5 impossible. If DB unavailable, deny.
 
-| 方式                                                        | 配信                                              | 最大5席                       | Neon / Vercelへの注意                                                                                                                                                                                      | 評価                                                                              |
-| ----------------------------------------------------------- | ------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Node local room/countのみ                                   | 各instance内のみ                                  | 不可                          | Vercelではsocketがinstance固定、再接続先は変わり得る                                                                                                                                                       | 不採用                                                                            |
-| Redis Adapter + Redis lease                                 | Redis pub/sub                                     | Lua/atomic keyで可能          | Redis/Marketplace契約とsecret、lease設計が追加で必要                                                                                                                                                       | 運用簡明だが新外部サービス。今回選定/作成しない                                   |
-| Socket.IO Postgres Adapter + separate PostgreSQL seat lease | PostgreSQL `NOTIFY/LISTEN` によるevent forwarding | transaction + row locksで可能 | Neon通常 pooled PgBouncer transaction mode は `LISTEN/NOTIFY` 非対応。adapter用のsession-capable/direct connectionが必要で、各active instanceにlistener接続が残る。Neon接続上限とVercel instance増加を評価 | Neon再利用の第一候補だが、session connectionの寿命/数がVercelと整合するかは未検証 |
-| DBをpollして自作同期                                        | message tableを短周期poll                         | transactionで可能             | DB負荷・遅延・重複/カーソル管理が増える                                                                                                                                                                    | Postgres Adapterより負荷・実装が増えるため原則避ける                              |
+### Join interruption / disconnect
 
-Socket.IO Postgres Adapter は inter-server broadcastのみで、座席管理・永続履歴・再接続回復は別責務。公式 adapter は `LISTEN/NOTIFY`、大きい/バイナリ payload のattachments table、connection state recovery非対応を明記。adapter障害がnode-local fallbackになる構成を避ける。[Postgres adapter](https://socket.io/docs/v4/postgres-adapter/) [Socket.IO adapters](https://socket.io/docs/v4/adapter/)
+After claim, handler checks `socket.connected` and token validity before calling `socket.join` and before sending history. If disconnect happens during asynchronous history read, a `disconnected` marker prevents room join/ack and `finally` runs conditional token release. A periodic local lease monitor checks only its instance's known sockets; renewal failure/expired token removes the socket from room and disconnects it. New broadcasts target only active socket IDs returned by shared DB checks, so stale memberships are not broadcast targets. Compensation is idempotent; TTL remains crash-recovery backstop.
 
-## 7. Vercel 配置・transport
+### Message transaction and lease validity
 
-- Vercel WebSocket はGAで、Functionが接続を受理し、その接続は最大実行時間まで当該 instance に pin される。次のconnection/reconnectが同じ instance に来る保証はない。in-memory count/roomを全体状態に使わない。
-- Expressは `node:http` の `createServer(app)` に載せ、同一serverに `new Server(httpServer)` をattachする。Vercel公式Node framework例はその server をFunction handlerとしてexportする。
-- Socket.IO client pathは Vercel Function URL配下へ明示する。Vercelでは `transports: ['websocket']` が必須。Socket.IO defaultのlong-pollingを含むtransport fallbackは使えない。このWebSocket-only構成ならtransport用sticky sessionは不要だが、跨instance room broadcastと共有presence/seatは依然外部共有が必要。
-- ローカルは `src/server.ts` が共有HTTP serverをlistenし、VercelはFunction entryからそのserverをexportする候補。既存プロジェクトのroot Express deploymentとのrouting衝突を解くには、VercelのBuild/routeでExpress app全体とsocket upgradeを同じ実行pathに届ける必要がある。Stagingで静的 `/`, TODO, AI, `/chat/`, handshakeを確認するまで公開停止を解除しない。
-- Vercel Functionの実行上限はPlan/Fluid Compute/Function設定により変わり、接続が最大実行時間に達すると切断される。Vercel公開資料は2026-11-25時点でFluid Compute default 300s、通常のNode Function maxはHobby 300s / Pro・Enterprise 800s、Pro/Enterpriseの1800sは条件付きbetaと記載。ただしこれはプロジェクト実効値ではない。deployment dashboard/configを実測し、推測値を運用値にしない。[Function limits](https://vercel.com/docs/functions/limitations) [Fluid Compute](https://vercel.com/docs/fluid-compute)
-- クライアントはSocket.IO reconnect後、`chat:join` を再送して新しいseat取得・最新20履歴を再取得。adapterはconnection-state recoveryをサポートしないため、local socket roomsや過去event stateを再利用しない。
-- Vercel local `vercel dev`/localhostは同一プロセスでの基本機能確認に限る。2 node、Vercel edge/CDN upgrade、最大実行時間切断、跨instance reconnect・seat統合はdeployed Previewでの専用試験が必要。実環境検証は安全性/公開停止条件の承認後。
+Within one transaction, lock the exact seat row, check `connection_id`, socket ID, fencing token and `expires_at > clock_timestamp()`, renew lease, validate room ownership and insert message with `RETURNING`. Commit before any adapter emit. History read similarly locks/validates/renews seat and performs SELECT in the same transaction; no history for expired connection. Message lock holds a recipient snapshot transaction: include only slots with valid expiry and token. To avoid sending to stale memberships, route to returned Socket IDs, not `io.to('lobby')` wildcard.
 
-## 8. Neon Poolと接続数
+Potential time elapsing between DB recipient snapshot and wire send is bounded by the operation; lease is renewed transactionally before the snapshot. Owner instance's 5s renewal/expiry monitor removes a socket that becomes stale. This design cannot revoke bytes already sent before expiry and does not claim that ability.
 
-現行 `src/db.ts` は1 `pg.Pool` per Node process、`max:2`。これはVercel全体の上限ではない。instance数Nでアプリ pool が理論上 `2N` clientを取り得るのに加え、Postgres adapterのpersistent LISTEN接続・SQL workloadが必要になる。NやNeon quotaはプロジェクト設定依存で未確認。instance scale-outがNeon connection capacityを超えない容量設計が必要。
+## 6. Seat state and lock/fencing details
 
-Neon公式は通常の pooled endpointがPgBouncer transaction modeで、`LISTEN/NOTIFY` はpooled connectionでは非対応、session機能が必要ならdirect connectionを使う旨を明示する。したがって現在の `DATABASE_URL` がpooler hostかdirect hostかを公開値なしに確認し、adapterはtransaction-pooler poolへつながない。Postgres Adapterにはsession-capable listener用pool、通常SQLはserverless向けpooled endpointという分離案があるが、接続数・sleep/reconnect・Function再利用に対する実装/運用適合性は未検証。[Neon connection pooling](https://neon.com/docs/connect/connection-pooling)
+State `FREE → CLAIMED(connection_id,token,expiry) → RENEWED → RELEASED/EXPIRED`. Concurrent cross-process claim transaction locks fixed rows. A serialization/lock timeout fails closed (`DB_UNAVAILABLE`), not local count fallback. Active leases count uses DB `clock_timestamp()`; tests use barriers for race ordering. Release with old token affects zero rows and is success/idempotent for caller but cannot free new owner.
 
-Socket.IO Postgres adapterの `LISTEN` connectionはFunctionsをidle回収する間も維持できるとは限らない。Functionが停止・再開後にlistenerを確実に再生成できるか、adapter heartbeatによるdown node検出が期限内に行われるかをmulti-process/deployed testsで確認する。Neon direct connectionの数を無制限に増やす前提にしない。
+Expiry causes that socket's next incoming event, history sync, or message to fail `NOT_JOINED`; passive receive is prevented by DB-selected target Socket IDs, plus local expiry monitor removes its room membership. Process crash releases nothing; other process can reclaim expired row only after 30s. A reconnect during this interval may see temporary full; UI says retry manually.
 
-## 9. イベントシーケンス
+## 7. Postgres Adapter, delivery semantics and outage recovery
+
+Postgres Adapter handles inter-instance Socket.IO broadcast, but not global seats, persisted chat history, or client receipt acknowledgments. It uses PostgreSQL LISTEN/NOTIFY. Adapter uses a dedicated `pg.Pool` with a **direct/session-capable connection string**; never feed it the normal Neon PgBouncer transaction pool. Message/seat SQL uses existing shared `requirePool()` configured to pooled endpoint for short transactions. Adapter attachment table gets a dedicated name/DDL.
+
+**No local-only fallback.** Adapter health is a readiness state shared by all per-socket handlers in that process. Adapter listener/pool errors, server heartbeat health check failures, or Postgres adapter `serverSideEmit`/`serverCount` health-check timeout mark delivery unavailable. During degraded state:
+
+1. keep joins, history, and writes fail-closed if shared DB/adapter state cannot establish authoritative admission;
+2. if INSERT committed before adapter went unavailable, retain the saved row and return `delivery:'unconfirmed'` / `DELIVERY_UNCONFIRMED`; never imply every participant received it;
+3. do not emit only to sender's local instance;
+4. notify connected local clients of degraded mode if their socket still works;
+5. each client continues scheduled latest-20 history reconciliation or performs it after reconnect; missing rows are merged by ID. This recovers data visibility, not the original instant broadcast.
+
+Socket.IO Postgres adapter has server-side broadcasts with acknowledgements but not connection-state recovery. An adapter publish call completing does not prove every browser rendered an event. If adapter emits fail silently without exposing errors, rely on server-side health probes plus history reconciliation and report delivery status conservatively. If reliable durable fanout becomes mandatory beyond periodic reconciliation, implement transactional outbox + managed durable worker as a separate architecture decision; do not pretend DB insert + NOTIFY is atomic. Adapter uses LISTEN/NOTIFY and supports an auxiliary attachments table for payloads >8KB/binary.[Adapter docs](https://socket.io/docs/v4/postgres-adapter/)
+
+## 8. Multiple-instance and Vercel deployment
+
+- Vercel requires Socket.IO WebSocket transport (not Engine.IO polling fallback) and Function URL path alignment; WebSocket-only avoids sticky-session requirement for polling sessions. Multi-instance Adapter and DB seats remain required.
+- Connection is pinned to accepting Function instance and closed at max duration; clients reconnect with Socket.IO backoff, rejoin, reclaim a seat, and reload history. Each reconnect may land elsewhere.
+- Function max-duration figures vary by plan/Fluid Compute/config, and deployment has not been inspected. The published default/max figures are not this app's effective timeout. Preview verification must record project setting, Function path, actual close behavior.
+- Local tests: one process proves component behavior; two independent processes plus disposable Postgres and adapter prove cross-process fanout/atomic seat race. These do not prove Vercel Function routing, websocket upgrade through CDN, function recycle/reconnect or Neon connection limits.
+- Neon: pooled endpoint is PgBouncer transaction-mode and explicitly does not support `LISTEN/NOTIFY`; direct endpoint session features are necessary for adapter. Each active Node instance may hold its own adapter listener pool plus `src/db.ts` app Pool (`max:2` per process). Capacity estimate is at most approx `2N + L*N` DB clients for N active instances and L adapter sessions each, not a global max. Direct connection quotas/scale and Function reuse must be checked. [Neon pooling docs](https://neon.com/docs/connect/connection-pooling)
+- New Vercel connection may go to another instance; room state/count stays in DB. Adapter/seat initialization failures keep chat disabled, while existing static page and other application routes remain available.
+
+## 9. Sequence
 
 ```mermaid
 sequenceDiagram
-  participant C as Browser Socket.IO
-  participant F as Function/Socket.IO instance
-  participant S as Shared seat DB
-  participant D as Neon messages DB
-  participant A as Cross-instance adapter
-  C->>F: connect (WebSocket)
-  C->>F: chat:join(username) + ack
-  F->>S: atomic claim 1 of 5 slots
-  alt no seat / guard closed
-    F-->>C: ROOM_FULL / DEMO_DISABLED
-  else admitted
-    F->>F: socket.join(lobby)
-    F->>D: SELECT newest 20
-    D-->>C: ack history oldest-first
+  participant C as Browser
+  participant F as Socket.IO instance
+  participant D as Shared PostgreSQL
+  participant A as Postgres Adapter
+  C->>F: connect WebSocket; chat:join(username)
+  F->>D: transaction lock 5 slots; idempotent claim/renew
+  alt full / guard disabled / DB error
+    F-->>C: safe ack error; no history, no room membership
+  else claim succeeded
+    F->>D: same seat validated; history SELECT newest 20; commit
+    F->>F: verify still connected, join internal room
+    F-->>C: join ack + chronological history
     C->>F: chat:message:send(comment)
-    F->>S: verify active lease
-    F->>D: INSERT RETURNING + COMMIT
-    D-->>F: durable DTO
-    F->>A: publish room event after commit
-    A-->>C: chat:message:new (all room sockets, sender included)
-    F-->>C: ack saved DTO
+    F->>D: transaction lock+validate lease; INSERT RETURNING; commit
+    F->>D: select currently valid recipient Socket IDs
+    F->>A: broadcast to recipient IDs (no local fallback)
+    A-->>C: chat:message:new (delivery best-effort)
+    F-->>C: ack saved + delivery state
+  end
+  loop every 10 seconds / after reconnect
+    C->>F: chat:history:sync
+    F->>D: transaction validate+renew lease; SELECT latest 20
+    D-->>C: snapshot; client merge by decimal-string id
   end
   C-->>F: disconnect
-  F->>S: release matching lease token
+  F->>D: conditional release using exact fencing token
 ```
 
-Ackとbroadcastの受信順は保証しない。client ID upsertで重複排除する。history responseの遅延中にmessage eventを受けても、両方をmapへmergeし、sort後にreplaceする。
+## 10. Error & security model
 
-## 10. 状態・失敗契約
+Fail closed on disabled flag/environment, adapter unavailable, seat DB uncertainty, history DB failure. No public chat default. Proposed env: `CHAT_DEMO_ENABLED=true` **only** when `NODE_ENV=development` and `VERCEL_ENV` unset; any Preview/Production or unknown config denies. This is chat-only and does not modify AI V1/V2 guards. EJS HTML is static trusted content; user content is text nodes only. No credentials/messages in logs. Validation occurs server side regardless of client checks. Rate limiting/user moderation are open future ops items, but payload limits and fixed max seats apply now.
 
-Client states: `DISCONNECTED → CONNECTING → JOINING → JOINED`; join rejection `FULL | DISABLED | ERROR`; disconnect時に送信不可、reconnectでは `JOINING` からやり直す。送信状態は `IDLE → SENDING → ACKED | FAILED/UNKNOWN`。自動再送なし。
+## 11. Unverified and unresolved deployment facts
 
-Server seat states: `FREE → CLAIMED(token, expires_at) → RENEWED* → RELEASED/EXPIRED`. Fencing tokenが一致しない遅延disconnectは新seatを消さない。DB/adapterの不明状態では受入・投稿・新着成功を装わない。
-
-| 状況                         | 契約                                                                                                       |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 公開停止                     | handshake拒否またはすべての chat event に `DEMO_DISABLED`; seat/history/DB操作なし                         |
-| 6席目                        | `ROOM_FULL`; 履歴を返さずSocket roomに入れずdisconnectか未参加状態を維持                                   |
-| 入力不正                     | `VALIDATION_ERROR`; 保存/emitなし                                                                          |
-| DB保存/lease失敗             | `DB_UNAVAILABLE`; emitなし                                                                                 |
-| DB commit済み後 adapter失敗  | `DELIVERY_UNCONFIRMED`候補。保存事実とライブ配送を分け、重複送信を促さず履歴確認。outboxの必要性は別途決定 |
-| socket切断/ Function timeout | 自動再送なし。再接続後join + history                                                                       |
-| 想定外                       | 固定 `INTERNAL_ERROR`; server logsはrequest/socket IDと安全な分類に限り、本文を出さない                    |
-
-## 11. 公開停止・セキュリティ
-
-- チャットは専用 `CHAT_DEMO_ENABLED` などのflag未設定時停止を候補とする。現行 V2 にならい local `NODE_ENV=development` かつ明示flag、`VERCEL_ENV`未設定だけを有効にする案。Previewでも無条件には有効化しない。Protection確認後の有効化規則・production常時停止は確定前に別途承認。
-- HTTP page visibilityとAPI/socket abilityを分ける。画面は出てもhandshake・events・historyはdenyできるようにする。
-- `Origin` allowlist、rate limit、接続 churn、max payload、CORS、Vercel protection、匿名利用のabuse対応を決める。表示名は認証ではない。
-- Browserは `textContent` / DOM text nodeのみ。`innerHTML`、Markdown/HTML rendering禁止。
-- 環境変数・DB接続URL・エラー詳細・user message全文をlogへ出さない。SQLはparameterized。
-- Server event発行前に参加状態と入力を毎回確認。client側のUI lockを認可として扱わない。
-
-## 12. 参考公式資料
-
-- [Vercel WebSocket support GA (2026-10-20)](https://vercel.com/changelog/websocket-support-is-now-generally-available)
-- [Vercel Functions WebSockets: Express/Socket.IO integration, websocket-only transport, reconnect and external state](https://vercel.com/docs/functions/websockets)
-- [Vercel Function limits](https://vercel.com/docs/functions/limitations)
-- [Vercel Fluid Compute settings](https://vercel.com/docs/fluid-compute)
-- [Socket.IO Postgres Adapter](https://socket.io/docs/v4/postgres-adapter/)
-- [Socket.IO multi-node deployment](https://socket.io/docs/v4/using-multiple-nodes/)
-- [Socket.IO client transport options](https://socket.io/docs/v4/client-options/)
-- [Neon connection pooling: transaction-mode limitations](https://neon.com/docs/connect/connection-pooling)
-
-## 13. 未確定事項
-
-正式 WISH 原文、public deployment host/path、Function runtime/plan/Fluid/maxDuration、route mapping、Preview protection、有効化 flag contract、Neon endpoint mode/limits/branch/region、Postgres adapter session connection survival, seats table recovery interval, DB ID public type, schema migration naming for adapter table, connection rate/abuse controls, broadcast durability/outbox, accessibility/retention/moderation remain open. No Vercel or Neon settings were changed in this design phase.
+Neon direct endpoint availability/connection quota for this adapter, Vercel routing entry and session lifetime, Vercel maxDuration and Preview protection, adapter fail/health signals supported by the chosen package version, outage simulation fidelity, triggerless history sync load, official WISH source and post retention policy are not established by local documentation. No Vercel or Neon settings are changed here. Deployed chat remains disabled until dedicated protected Preview test and explicit approval.

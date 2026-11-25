@@ -1,61 +1,65 @@
-# リアルタイムチャット 試験仕様書（草案）
+# リアルタイムチャット 試験仕様書（確定案）
 
-## 1. 試験レイヤーの区別
+## 1. 試験レイヤーと未実施扱い
 
-- **Unit/server test**: injected socket/service/model and Node test runner. No external services.
-- **Disposable PostgreSQL**: DDL, constraints, transaction, ID/order, lease competition. Never Neon production.
-- **Local multi-process**: two independent Node processes with shared adapter/presence DB and independent Socket.IO clients.
-- **Browser E2E**: Playwright, two browser contexts/tabs. May use local server and disposable DB. No Gemini/AI auto-response.
-- **Protected Preview**: deployment-specific WebSocket upgrade, routing, max duration/reconnect, cross-instance behavior, protection scopes. Only after access protection is verified.
-- **Manual user test**: separately identify operator, environment, date, observed URL/status and DB target. Do not combine with automation.
+- **Unit/server**: injected model/adapters and Node test runner.
+- **Disposable PostgreSQL**: actual DDL/transactions/locking/constraints. No Neon.
+- **Local multi-process**: two independent Node processes, actual Socket.IO client/server and shared disposable PostgreSQL Adapter.
+- **Browser E2E**: Playwright, real local Socket.IO, multiple browser contexts. AI/Gemini never called.
+- **Protected Preview/Vercel**: deployment routing, websocket upgrade, duration/reconnect, protections and Neon endpoint. Only after authorized protected test setup.
+- **Manual**: user/operator, environment, date, endpoint/status and DB target separately recorded.
 
-No tests in this specification have been run by creation of this document. Results belong in `06_test_results.md`.
-
-下表の短縮表記 `REQ-nnn` は `REQ-CHAT-nnn`、`TASK-A`〜`TASK-E` は `TASK-CHAT-A`〜`TASK-CHAT-E` を表す。
+No test below is run merely by including it here. A mock test never implies Neon/Vercel success. TST-33 remains blocked until access to actual protected Preview; TST-34 is code/static review plus local test.
 
 ## 2. Test cases / traceability
 
-| TST    | Test / setup                                                                              | Expected result                                                                                      | Trace                           |
-| ------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------- |
-| TST-01 | `GET /chat/` local                                                                        | chat page returned; static asset URLs load                                                           | REQ-001, TASK-A                 |
-| TST-02 | Socket connection while chat disabled/unconfigured                                        | upgrade or join denied with safe fixed contract; no DB/history                                       | REQ-015, TASK-A                 |
-| TST-03 | Two Socket.IO clients join same room and exchange messages both ways                      | both receive each stored event exactly once incl sender                                              | REQ-002,007,010,013; TASK-C,D,E |
-| TST-04 | DB query for TST-03 posts                                                                 | one committed row per accepted post, generated IDs distinct                                          | REQ-007; TASK-C                 |
-| TST-05 | TOP/TODO V1/V2/AI V1/V2, existing 404 and JSON parse failure smoke test                   | prior responses and error format unchanged                                                           | REQ-016; TASK-A,E               |
-| TST-06 | disposable DB create DDL on empty schema                                                  | expected tables/checks/indexes/identity/default present                                              | REQ-005,014; TASK-B             |
-| TST-07 | run same DDL a second time                                                                | idempotent success, no duplicate seat slots or damage                                                | REQ-011,014; TASK-B             |
-| TST-08 | precreate same-name constraint/index with wrong definition then apply/check script        | stop with explicit mismatch; no object alteration/drop                                               | REQ-014; TASK-B                 |
-| TST-09 | history with 0, 1, 20, 21+ rows                                                           | at most 20, SQL newest `(created_at DESC,id DESC)`, client chronology oldest-first                   | REQ-005; TASK-B                 |
-| TST-10 | equal `created_at`, adjacent ids                                                          | deterministic tie-break by ID descending before returned reversal                                    | REQ-005; TASK-B                 |
-| TST-11 | username missing/wrong type/empty/spaces/1/30/31 code points                              | valid boundaries accepted; invalid rejected, no seat/history                                         | REQ-002,014; TASK-C             |
-| TST-12 | comment missing/wrong type/empty/spaces/1/2000/2001 code points, including astral Unicode | valid codepoint boundaries accepted; invalid rejected, no DB/emit                                    | REQ-006,014; TASK-C             |
-| TST-13 | oversize socket event payload and unknown keys/malformed object                           | server rejects safely; no persist/broadcast; event loop healthy                                      | REQ-006,017; TASK-C             |
-| TST-14 | attempt `<script>` / HTML in username and comment                                         | DOM displays literal text, no script executed                                                        | REQ-014; TASK-C,D               |
-| TST-15 | delay DB INSERT promise before commit                                                     | no sender success ack or broadcast until commit resolves                                             | REQ-007; TASK-C                 |
-| TST-16 | model insert failure / transaction rollback                                               | no room broadcast, sender gets fixed DB error, one failed operation                                  | REQ-008; TASK-C                 |
-| TST-17 | send while socket never joined or after seat invalidation                                 | rejected; no DB write/event                                                                          | REQ-003,007; TASK-C,D           |
-| TST-18 | 5 concurrent sockets join                                                                 | all 5 get seat + history                                                                             | REQ-004; TASK-D                 |
-| TST-19 | 6th socket joins after five occupied                                                      | ROOM_FULL; no history, no room membership, no receive/send                                           | REQ-003,004; TASK-D             |
-| TST-20 | disconnect a seated client then another client joins                                      | released slot can be acquired once                                                                   | REQ-011; TASK-D                 |
-| TST-21 | abruptly terminate server holding seats, wait lease threshold, then join                  | stale seats reclaimed by DB time; never >5 active valid leases                                       | REQ-011; TASK-D,E               |
-| TST-22 | Socket.IO auto reconnect after server restart/function close                              | client reconnects, repeats join, history restored, no automatic pending post resend                  | REQ-012; TASK-D,E               |
-| TST-23 | delay history SELECT while a new DB-backed event arrives                                  | client merges by ID, no duplicate, ascending display, <=20 messages                                  | REQ-010; TASK-D                 |
-| TST-24 | return same message by join history, broadcast and sender ack                             | one rendered message (ID keyed upsert)                                                               | REQ-010; TASK-D                 |
-| TST-25 | seat store/lease renewal DB outage                                                        | new join/send rejected; local-only fallback not used; cleanup is idempotent                          | REQ-008,011,015; TASK-D         |
-| TST-26 | two server processes, clients connected one to each, each sends                           | cross-process bidirectional event propagation                                                        | REQ-013; TASK-E                 |
-| TST-27 | shared DB has 4 occupied seats; two processes concurrently admit 2 clients                | exactly one succeeds, total never exceeds 5                                                          | REQ-004,013; TASK-E             |
-| TST-28 | one process exits without cleanup; remaining process sees expired lease                   | lease recovered after configured expiration, other seats unaffected                                  | REQ-011,013; TASK-E             |
-| TST-29 | adapter connection goes down during a post                                                | no false delivery guarantee; DB persistence/history can reconcile; failure logged safely             | REQ-008,013; TASK-E             |
-| TST-30 | inspect Vercel Socket.IO client config                                                    | WebSocket-only transport and Function path; no polling                                               | REQ-013,015; TASK-E             |
-| TST-31 | protected Preview connection and deliberate Function max-duration reconnect               | protection covers upgrade path; reconnect to possibly different instance rejoins and reloads history | REQ-012,015; TASK-E             |
-| TST-32 | verify production/preview disabled config + direct handshake attempt (no post)            | chat APIs/Socket stop; page behavior per policy; no DB access                                        | REQ-015; TASK-E                 |
-| TST-33 | inspect Neon adapter connection and load                                                  | LISTEN uses session-capable endpoint; actual per-instance connections within branch/project limit    | REQ-013,015; TASK-E             |
-| TST-34 | static security review                                                                    | no credentials in browser; safe text DOM; no message/secret logs; parameterized SQL                  | REQ-014; TASK-E                 |
-| TST-35 | Vercel root route regression and function routing                                         | `/`, TODO V1/V2, AI V1/V2, `/chat/`, 404/static assets route to expected handlers                    | REQ-001,016; TASK-A,E           |
-| TST-36 | send a chat post while observing the chat service boundary                                | user post only; no AI service/Gemini call, generated answer, or AI V1/V2 history access              | REQ-018; TASK-A,E               |
+| TST    | Test                                                                          | Expected / evidence                                                                                                | REQ / TASK        |
+| ------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| TST-01 | GET `/chat`                                                                   | Router + Controller render EJS; CSS/JS served                                                                      | 001 / A           |
+| TST-02 | Chat flag absent/false, or env not local                                      | handshake/join denied before database access                                                                       | 015 / A           |
+| TST-03 | Two clients on same process, both directions                                  | each committed message appears once on each client including sender                                                | 007,010 / C,D     |
+| TST-04 | Count DB rows for accepted messages                                           | exactly one row per accepted post, DB BIGINT ID returned as decimal string                                         | 007 / C           |
+| TST-05 | Existing TOP/TODO V1/V2/AI V1/V2/404/JSON error checks                        | behavior and contracts unchanged                                                                                   | 016 / A,E         |
+| TST-06 | Apply chat DDL in empty disposable DB                                         | all columns/types/identity/check/index/default/5 slots match design                                                | 005,011,014 / B   |
+| TST-07 | Apply same DDL twice                                                          | succeeds idempotently; exactly five slots, adapter table valid                                                     | 011,014 / B       |
+| TST-08 | Precreate same-name object with different check/index/key/default             | checker stops; does not ALTER/DROP existing object                                                                 | 014 / B           |
+| TST-09 | History table with 0,1,20,21+ rows                                            | <=20 latest, database newest order, returned display oldest first                                                  | 005 / B,D         |
+| TST-10 | Equal timestamp, differing BIGINT IDs                                         | deterministic `created_at DESC,id DESC` before result reversal                                                     | 005 / B           |
+| TST-11 | Username invalid/missing/wrong type/blank; boundary 1,30,31 incl astral chars | accept 1/30 code points; reject others before seat/history                                                         | 002 / C           |
+| TST-12 | Comment boundary 1,2000,2001, whitespace-only and astral Unicode              | accept 1/2000 after trim; reject invalid with no insert/emit                                                       | 006 / C           |
+| TST-13 | Malformed event, unexpected fields, payload >16 KiB                           | safe validation ack; no query/emit; socket remains usable                                                          | 017 / C           |
+| TST-14 | XSS strings for username/comment                                              | EJS values safely escaped; browser inserts text only; no execution                                                 | 014 / A,D         |
+| TST-15 | Delay insert/commit promise                                                   | no success ack/broadcast until DB transaction commit resolves                                                      | 007 / C           |
+| TST-16 | DB insert throws/rollback                                                     | sender gets fixed DB error; no target receives message                                                             | 008 / C           |
+| TST-17 | Never joined, seat expired, or wrong fencing token sends/history sync         | `NOT_JOINED`; no row/history returned/event                                                                        | 003,019 / C,D     |
+| TST-18 | Five simultaneous valid connections                                           | all admitted; shared DB shows at most five active leases                                                           | 004 / D           |
+| TST-19 | Sixth connection                                                              | `ROOM_FULL`; no history, join, message send or receive                                                             | 003,004 / D       |
+| TST-20 | Graceful disconnect and next join                                             | exact lease released, one replacement seat acquired                                                                | 011 / D           |
+| TST-21 | Force-kill seat owner process                                                 | slot becomes reclaimable only after DB-clock lease expiry (~30s)                                                   | 011 / D,E         |
+| TST-22 | Reconnect after disconnect/process recycle                                    | new connection re-admits/rejoins and loads history; no message auto-resend                                         | 012 / D,E         |
+| TST-23 | History response delayed while new event arrives                              | client merges by decimal BIGINT ID, no duplicates, chronological max20                                             | 010,019 / D       |
+| TST-24 | Same post appears from history, broadcast, and ack                            | UI displays exactly once                                                                                           | 010 / D           |
+| TST-25 | DB fails during claim/renew/history/send                                      | deny action; no local seat/count fallback; cleanup idempotent                                                      | 003,008,019 / C,D |
+| TST-26 | Two independent processes, clients on each, send both ways                    | Postgres Adapter delivers cross-instance; one DB row per post                                                      | 013 / E           |
+| TST-27 | Four seats active; synchronize two last-slot claims in separate processes     | exactly one new admission succeeds (5 total)                                                                       | 004,013 / E       |
+| TST-28 | Old release delayed until same slot reclaimed with new token                  | old release affects zero rows; new seat still valid                                                                | 011,019 / D,E     |
+| TST-29 | Disconnect during delayed claim/history and kill process mid-join             | compensating exact-token release; if process dies, expiry reclaims seat                                            | 011,019 / D,E     |
+| TST-30 | Expired socket remains physically connected and another post occurs           | excluded from DB-active Socket ID targets; history/send denied                                                     | 003,019 / D,E     |
+| TST-31 | Disable adapter listener / cross-instance health                              | no local-only fallback; save vs delivery state distinct; recovery after listener restores                          | 020 / E           |
+| TST-32 | Interrupt adapter publish after DB commit                                     | saved row remains; ack says delivery unconfirmed; later sync/rejoin recovers one row                               | 020 / E           |
+| TST-33 | Protected Preview Socket.IO                                                   | WebSocket-only Function path upgrade; access protection covers handshake; stop flag denies public                  | 015 / E           |
+| TST-34 | Neon/Function connection and effective duration review                        | record Neon session/direct endpoint, actual pool limits, instance/listener count, runtime/maxDuration; never infer | 013,015 / E       |
+| TST-35 | Static secret/log/SQL audit                                                   | no browser DB/secret, no message text logs, parameterized SQL, no unsafe DOM                                       | 014,018 / E       |
+| TST-36 | Chat post with AI service boundary spy                                        | no Gemini/AI call, answer generation, or V1/V2 history access                                                      | 018 / A,E         |
+| TST-37 | Same Socket sends concurrent duplicate `chat:join`                            | one fixed slot and same token/lease; one history result or idempotent ack                                          | 004,019 / D       |
+| TST-38 | Cut socket after seat claim while history query is pending                    | no history ack/room admission after disconnect; compensation release; slot reusable                                | 009,011,019 / D   |
+| TST-39 | Ten-second history sync after adapter outage                                  | saved unseen messages arrive once; max20 order preserved; no local fallback                                        | 020 / D,E         |
+| TST-40 | Check runtime intervals and adapter heartbeat                                 | lease TTL 30s, renewal batch interval 5s, reconcile 10s; test tolerates DB timing deterministically                | 011,020 / D,E     |
 
-## 3. Required evidence record
+## 3. Test evidence format
 
-Each test result records TST ID, layer (unit / disposable DB / local multi-process / browser / Preview / manual), command or exact manual steps, test count/pass/fail, date/time+timezone, build/commit ID, DB type/branch only (never connection string), and limitations. Preview evidence states how access protection covered both HTTP and WebSocket upgrade without recording secrets or untrusted sessions.
+For every TST record layer, command/procedure, commit, date/time/timezone, count/pass/fail, exact observed outcome, DB kind (disposable/Neon branch name only), and limitations. Do not write connection strings or secrets. `PASS` applies only to named layer. Required categories: automated unit, browser mock/real local socket, disposable DB, multi-process, user manual, protected Preview/Neon.
 
-Tests needing actual Neon, Redis, Vercel upgrade, Fluid Compute or user interaction remain `NOT RUN` until executed. Unit mock success does not imply shared DB or deployed Socket.IO success. A DB test on disposable Postgres does not prove Neon PgBouncer/direct endpoint compatibility.
+## 4. Operational procedure for real environments
+
+Do not execute Neon DDL in this task. After DDL review/approval, operator chooses a disposable Neon branch, checks branch/database identity, compares `pg_get_constraintdef`, `pg_get_indexdef`, `pg_index`, `pg_get_expr`, identity/default and exact five seat rows; mismatch means stop, no auto repair. Only then manually apply `sql/chat/050...` and `051...` after separate approval. For Vercel, first verify auth protection covers HTML and websocket upgrade, node runtime/Fluid/maxDuration, routing and direct Neon endpoint capacity. Keep `CHAT_DEMO_ENABLED` off until those checks pass. Never send AI prompts from this chat.

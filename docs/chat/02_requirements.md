@@ -1,76 +1,92 @@
-# リアルタイムチャット 要件定義書（草案）
+# リアルタイムチャット 要件定義書（確定案）
 
-## 1. 前提と用語
+## 1. 前提・確定値
 
-WISH-CHAT-001〜005 は `01_request.md` に記載した暫定分類であり、教材原本の正式 ID ではない。ここで定義する REQ も依頼者提示の要望を実装・試験可能に分解した草案である。閾値・公開有効化条件など「候補」と明記した値はレビュー確定前である。
+教材の正式 WISH 原本は未取得である。`WISH-CHAT-001〜005` は今回の依頼に対する暫定分類であり、教材の正式IDとして扱わない。以下は今回の実装で確定したスコープである。
 
-- **接続**：サーバーが受理し Socket.IO が確立した1つの client socket。タブ・再接続後の新 socket は別接続として扱う候補。
-- **参加者**：サーバーが当該接続について席を確保し、ルーム入室を許可した接続。
-- **保存済み投稿**：DB transaction が commit された投稿。
-- **同期**：他インスタンスに接続した同ルーム参加者にも最終的にイベントが配送されること。Postgres NOTIFY は永続キューではなく、障害時の即時配送保証は別途設計が必要。
+- 単一ルーム `lobby`、全インスタンス合計5 Socket接続。tabは接続ごとに別席。
+- username: trim後1〜30 Unicodeコードポイント。comment: trim後1〜2,000 Unicodeコードポイント。
+- display nameは認証/認可情報でない。ログインなし。
+- 投稿IDはPostgreSQL BIGINT、wire DTO上は10進文字列。
+- 最新20件を取得し、画面では古い順に表示。
+- Postgres Adapterをインスタンス間配信に用い、Neon/PostgreSQLで共有seatを原子的管理。
+- Socket.IO transportはWebSocket専用。公開環境は明示的に許可されない限り停止。
+- 実NeonとVercelでの適合性は未検証。実機で成功と報告しない。
 
-## 2. 機能要件と受入条件
+## 2. 機能要件・受入条件
 
-| REQ          | 要件・受入条件                                                                                                                                                                               | WISH     |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| REQ-CHAT-001 | `/chat/` を開くとチャット画面が表示され、TOPへ戻れる。画面は接続状態・入室状態・人数/満席・履歴・入力エラーを区別して表示する。投稿は利用者間のテキスト会話であり、AI自動応答はしない        | 001, 002 |
-| REQ-CHAT-002 | クライアントはユーザー名を添えて単一ルームへ入室要求できる。サーバーは型、trim 後の空白、Unicode コードポイント長を検証する。1〜30 は候補値                                                  | 001, 004 |
-| REQ-CHAT-003 | ルームへの参加資格がない socket は履歴閲覧、新着受信、投稿のいずれもできない。room membership と共有席状態の両方をサーバー側で確認する                                                       | 004      |
-| REQ-CHAT-004 | 1ルームの有効席は全インスタンス合計最大5。全席使用中の6接続目には `ROOM_FULL` を返し、履歴を返さず、room join / 投稿 / 新着受信を認めない                                                    | 004, 005 |
-| REQ-CHAT-005 | 参加成功時、保存履歴の新しい20件までを古い順にクライアントへ返す。DB側の抽出順は `created_at DESC, id DESC` でlimit後、応答は逆順                                                            | 003      |
-| REQ-CHAT-006 | コメントは文字列で、trim 後1〜2,000 Unicode コードポイント。JSON event payload と他フィールドもサーバーで検証する。1〜2,000 は依頼の指定値                                                   | 002, 004 |
-| REQ-CHAT-007 | 投稿イベントは送信 socket が現在参加中であることを確認してから保存する。保存成功・commit後にのみ同じルームへ配信し、DB採番 ID と DB 作成日時を含める                                         | 002      |
-| REQ-CHAT-008 | DB保存失敗時は当該投稿を配信せず、送信者へ安全な失敗 ack/event を返す。内部例外・SQL・接続値をクライアントへ返さない                                                                         | 002, 004 |
-| REQ-CHAT-009 | DB履歴取得が失敗した場合は入室成功・空履歴として扱わない。安全なエラーで参加処理を拒否し、確保済み席があれば解放する                                                                         | 003, 004 |
-| REQ-CHAT-010 | 履歴取得中に新着イベントが届いても、DB採番投稿 ID を用いて1件だけ表示し、日時・ID順で整列する。画面に保持する履歴は最新20件                                                                  | 003      |
-| REQ-CHAT-011 | 切断時は席を即時解放する。異常終了で disconnect 処理がない席は共有 lease の期限後に回収可能とする。lease の確定時間は設計レビューで決める                                                    | 004, 005 |
-| REQ-CHAT-012 | Socket.IO の再接続後は新 connection として公開制御・入室・席確保・履歴再取得を行う。自動再送はしない。満席・DB停止時は再入室失敗を表示する                                                   | 003, 004 |
-| REQ-CHAT-013 | 複数サーバーインスタンス間で同ルームの保存済み投稿を配信し、席確保もDB等の共有ストアの原子的操作で全体5席を守る                                                                              | 005      |
-| REQ-CHAT-014 | チャット表示で user name / comment を HTML として実行しない。型・長さ・空白をサーバーで検証し、DB query はパラメーター化する                                                                 | 001, 004 |
-| REQ-CHAT-015 | チャット Web/Socket endpoints は既定で停止する。ローカル以外を有効化するのは Deployment Protection、origin/接続制御、共有容量・障害時 fail-closed が確認された後。環境判定が曖昧な場合は停止 | 005      |
-| REQ-CHAT-016 | `/`, TODO V1/V2, AI V1/V2, DB check と既存404/error動作に回帰がない                                                                                                                          | 005      |
-| REQ-CHAT-017 | JSON event data の合計バイト上限を設けてサーバーで拒否する。**具体的上限は未確定**（コメント上限のみで Socket.IO の protocol overhead と payload サイズを決めない）                          | 004      |
-| REQ-CHAT-018 | チャット投稿を Gemini/API/AI V1/V2 に送らず、サーバーがAIによる自動返信を生成しない                                                                                                          | 002, 005 |
+| REQ          | 要件・確認可能な受入条件                                                                                                                                                                         | WISH        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| REQ-CHAT-001 | `GET /chat` がRouter→Controller→EJS renderを通り `views/chat/index.ejs` を表示する。TOPリンク、状態/履歴表示を持つ。資産は `public/chat/chat.js`, `chat.css`                                     | 001         |
+| REQ-CHAT-002 | `chat:join({username})` はtrim後1〜30 code pointsのみ受理。型違い/空白/境界外は安全なvalidation ack、seat/history/room joinなし                                                                  | 001,004     |
+| REQ-CHAT-003 | 参加資格が確認できるsocketのみ履歴閲覧/投稿/room配信を受ける。lease確認不能やDB障害時は拒否                                                                                                      | 004         |
+| REQ-CHAT-004 | lobbyはDB上の固定5 slotを全instanceで共有。5接続までjoin成功、6接続目は満席、履歴/受信/送信不可。別tabは別席。同一socketの重複・同時joinは既存seatを返しslotを増やさない。満席後は利用者が再試行 | 004,005     |
+| REQ-CHAT-005 | join/rejoinで最大20件を返す。DBは `(created_at DESC, id DESC) LIMIT 20`、wire historyは昇順                                                                                                      | 003         |
+| REQ-CHAT-006 | commentはtrim後1〜2,000 code points。Unicode astral文字の境界をコードポイントで検証し、trim済み値を保存                                                                                          | 002,004     |
+| REQ-CHAT-007 | 参加leaseを確認し、DB insert transaction commit成功後だけroom配信する。投稿DTOのidと日時はDB値                                                                                                   | 002         |
+| REQ-CHAT-008 | DB保存失敗時は配信なし、送信者へ固定安全エラー。例外・SQL・接続値をwire/logへ出さない                                                                                                            | 002,004     |
+| REQ-CHAT-009 | 履歴取得/入室準備失敗を空履歴として扱わない。途中で取得した席は補償releaseし、履歴を漏らさない                                                                                                   | 003,004     |
+| REQ-CHAT-010 | historyとlive/ackの競合はBIGINT十進文字列IDでupsertし、重複なし、時間/id順、最新20件に維持                                                                                                       | 003         |
+| REQ-CHAT-011 | leaseは30秒、5秒ごと更新（後述の根拠）。切断時はtoken一致条件の即時release、異常終了はDB時刻で期限後に回収。古いtokenは新しいleaseを変更できない                                                 | 004,005     |
+| REQ-CHAT-012 | reconnectは新Socketとして再join・再admission・履歴再取得。自動投稿再送しない。満席時は明示表示し利用者による再試行を待つ                                                                         | 003,004     |
+| REQ-CHAT-013 | Socket.IO Postgres Adapterで別instanceへ同room eventを配信する。AdapterのLISTEN/NOTIFYはsession-capable接続に限定しNeon transaction poolを使わない。seat管理は別のDB transactionで行う           | 005         |
+| REQ-CHAT-014 | username/commentをtextとして表示しHTML解釈しない。SQL parameter化、event payload上限、入力検証をserverで実施                                                                                     | 001,004     |
+| REQ-CHAT-015 | chat page/Socketは既定停止。localhost開発で明示許可された場合のみ接続可能。Preview/Productionは設定確認と個別承認前は停止                                                                        | 005         |
+| REQ-CHAT-016 | TOP、TODO V1/V2、AI V1/V2、DB check、404、JSON error契約を維持                                                                                                                                   | 005         |
+| REQ-CHAT-017 | Socket JSON payload全体に16KiB上限を設け、超過は保存/配信前に拒否                                                                                                                                | 004         |
+| REQ-CHAT-018 | chatは利用者間のテキスト機能。Gemini/AI V1/V2へ投稿を送らず、自動応答を生成しない                                                                                                                | 002,005     |
+| REQ-CHAT-019 | seat有効性照合と投稿INSERT/履歴SELECTを同一DB transaction内で行う。broadcastは有効seatのSocket ID宛て。期限切れsocketは投稿・履歴・新着対象外。入室中切断の確保seatは補償解放                    | 003,004     |
+| REQ-CHAT-020 | Adapter/DB共有配信障害時にlocal-only emitへ縮退しない。DB保存結果と全員への配信確認を分離し、確認できない配信は未確認とする。履歴差分同期/再入室で欠落を回復                                     | 002,003,005 |
 
-## 3. 非機能・運用条件
+## 3. Leaseの時間設定と根拠
 
-- 1 room、最大5接続は当初の小規模スコープ。人数をユーザー ID や認証と混同しない。
-- 保存成功 ack と配信の順序を定義し、DB commit 前の broadcast は禁止。
-- 通信切断時は自動再送しない。保存済みか不明な投稿は再接続後に履歴で確認する。
-- 共有状態DB/adapter障害時に node-local fallback へ切り替えない（多重入室や分断を避けるため fail-closed）。
-- 接続数、lease 期限、投稿頻度、同一接続の連投制限、履歴保持期間、削除・モデレーションは未決定。
-- Socket.IO heartbeat・Function実行時間・DB sessionを考慮して接続を再確立可能にする。
-- 依存ライブラリ、Neon設定、Vercel設定はこの文書作成フェーズでは変更しない。
+- lease期限: **30秒**。process crash後のslot回収遅延を最大おおむね30秒に制限する運用目標であり、正確な切断検知時間を保証する値ではない。
+- renewal: **5秒間隔**。30秒内に複数回の更新機会を持たせ、一時的な1回のDB遅延で即seatを失わないための設計値。renewはinstance単位にbatch化し、DB clockで `expires_at = CURRENT_TIMESTAMP + interval '30 seconds'` とする。
+- lease/renewの数値は依頼者の明示値でなく、今回確定する初期値。disposable DB・multi-process試験で失効/回収/更新競合を確認し、実Neon・Vercelの遅延/停止時間で再評価する。
+- renewal失敗が期限を越えた場合、該当socketはfail-closedで退室・切断扱いとする。満席の一時誤判定は許容し、席超過はしない。
 
-## 4. 受入・トレーサビリティ
+## 4. 非機能・障害条件
 
-| WISH          | REQ                                   | DES                              | TASK    | TST                                        |
-| ------------- | ------------------------------------- | -------------------------------- | ------- | ------------------------------------------ |
-| WISH-CHAT-001 | REQ-CHAT-001, 002, 014                | DES-CHAT-001, 002, 006           | A, C, D | TST-01, 11, 14, 19, 22                     |
-| WISH-CHAT-002 | REQ-CHAT-001, 006, 007, 008, 013, 018 | DES-CHAT-002, 003, 005, 007, 008 | A, C, E | TST-03, 04, 12, 15, 16, 26, 36             |
-| WISH-CHAT-003 | REQ-CHAT-005, 009, 010, 012           | DES-CHAT-003, 006, 007           | B, D, E | TST-09, 10, 22, 23, 24, 31                 |
-| WISH-CHAT-004 | REQ-CHAT-003, 004, 011, 012, 017      | DES-CHAT-002, 004, 006           | C, D, E | TST-13, 17, 18, 19, 20, 21, 27, 28         |
-| WISH-CHAT-005 | REQ-CHAT-013, 015, 016, 018           | DES-CHAT-001, 005, 007, 008      | A, E    | TST-02, 05, 26, 27, 30, 31, 32, 33, 35, 36 |
+- 入室状態はsocket単位でサーバー確認し、UIフラグを認可として使わない。
+- duplicate joinは同一connection UUIDの既存leaseを返す。join中切断時はawait後にconnectedを再確認し、未接続なら同fencing tokenでrelease。DB側でもlease期限による最終回収を行う。
+- send transactionはseat行を `FOR UPDATE` し、owner/lease token/期限をDB時刻で確認してからinsert・commit。旧socketやexpired socketは保存できない。
+- historyはseat行をlock/renew確認し、同一transaction内でselectする。socketへの応答直前に未接続なら応答を捨て、lease解放。
+- broadcast先はDBで有効性確認した最大5 Socket IDに限定する。Adapter送信は全socket受信ACKを証明しない。DB commitは成功しても配信は未確認となり得る。
+- local emitへのfallbackは禁止。障害後は周期history sync/rejoinでDB上の差分を回収。同期期間中の欠落を隠さない表示にする。
+- `innerHTML`禁止。ログはsocket/request IDと安全なerror categoryに限定し投稿本文/secretを含めない。
+- DDL、依存、外部接続は文書確定後の実装タスクで行い、Neonへ自動適用しない。
 
-| REQ          | DES                    | TASK | TST                    |
-| ------------ | ---------------------- | ---- | ---------------------- |
-| REQ-CHAT-001 | DES-CHAT-001, 006      | A, D | TST-01, 19, 22         |
-| REQ-CHAT-002 | DES-CHAT-002           | C    | TST-11                 |
-| REQ-CHAT-003 | DES-CHAT-002, 004      | C, D | TST-17, 19             |
-| REQ-CHAT-004 | DES-CHAT-004, 005      | D, E | TST-18, 19, 27         |
-| REQ-CHAT-005 | DES-CHAT-003, 006      | B, D | TST-09, 10, 23         |
-| REQ-CHAT-006 | DES-CHAT-002           | C    | TST-12, 13             |
-| REQ-CHAT-007 | DES-CHAT-003, 005      | C, E | TST-03, 04, 15, 26     |
-| REQ-CHAT-008 | DES-CHAT-002, 003, 005 | C, E | TST-16, 25, 29         |
-| REQ-CHAT-009 | DES-CHAT-003, 004      | B, D | TST-09, 25             |
-| REQ-CHAT-010 | DES-CHAT-006           | D    | TST-23, 24             |
-| REQ-CHAT-011 | DES-CHAT-004           | D, E | TST-20, 21, 28         |
-| REQ-CHAT-012 | DES-CHAT-006, 007      | D, E | TST-22, 31             |
-| REQ-CHAT-013 | DES-CHAT-005, 007      | E    | TST-26, 27, 28, 29, 33 |
-| REQ-CHAT-014 | DES-CHAT-002, 003, 006 | B, C | TST-08, 11, 12, 14, 34 |
-| REQ-CHAT-015 | DES-CHAT-008           | A, E | TST-02, 25, 30, 31, 32 |
-| REQ-CHAT-016 | DES-CHAT-001           | A, E | TST-05, 35             |
-| REQ-CHAT-017 | DES-CHAT-002, 003      | C    | TST-13                 |
-| REQ-CHAT-018 | DES-CHAT-002, 008      | A, E | TST-34, 36             |
+## 5. トレーサビリティ
 
-テスト ID と受入条件の対応は `05_test_spec.md` を参照。REQ-CHAT-015 は公開環境の設定・保護を実環境で確認するまで「実装上の停止ガード」だけでは完了扱いしない。
+WISH IDは暫定分類で、教材正式WISH原本未取得。
+
+| WISH          | REQ                     | DES                          | TASK  | TST                         |
+| ------------- | ----------------------- | ---------------------------- | ----- | --------------------------- |
+| WISH-CHAT-001 | 001,002,014             | DES-CHAT-001,002,006         | A,C,D | TST-01,11,14,19,22          |
+| WISH-CHAT-002 | 006,007,008,013,018,020 | DES-CHAT-002,003,005,006,007 | C,E   | TST-03,04,12,15,16,26,29,36 |
+| WISH-CHAT-003 | 005,009,010,012,019,020 | DES-CHAT-003,006             | B,D,E | TST-09,10,22-25,29          |
+| WISH-CHAT-004 | 003,004,011,012,017,019 | DES-CHAT-002,004,006         | C,D,E | TST-13,17-25,27,28          |
+| WISH-CHAT-005 | 013,015,016,018,020     | DES-CHAT-001,005,007,008     | A,E   | TST-02,05,26-36             |
+
+| REQ | DES         | TASK    | TST               |
+| --- | ----------- | ------- | ----------------- |
+| 001 | 001,006     | A,D     | 01,19,22,35       |
+| 002 | 002         | C       | 11                |
+| 003 | 002,004     | C,D     | 17,19,25,28       |
+| 004 | 004,005     | D,E     | 18,19,27          |
+| 005 | 003,006     | B,D     | 09,10,23          |
+| 006 | 002         | C       | 12,13             |
+| 007 | 003,005     | C,E     | 03,04,15,26       |
+| 008 | 002,003,005 | C,E     | 16,25,29          |
+| 009 | 003,004     | B,D     | 09,25             |
+| 010 | 006         | D       | 23,24             |
+| 011 | 004         | D,E     | 20,21,28          |
+| 012 | 006,007     | D,E     | 22,31             |
+| 013 | 005,007     | E       | 26-29,33          |
+| 014 | 002,003,006 | B,C,D   | 08,11,12,14,34    |
+| 015 | 008         | A,E     | 02,25,30-33       |
+| 016 | 001         | A,E     | 05,35             |
+| 017 | 002,003     | C       | 13                |
+| 018 | 002,008     | A,E     | 34,36             |
+| 019 | 003,004,006 | B,C,D,E | 17,21,23,25,27,28 |
+| 020 | 005,006,007 | C,D,E   | 29,31,33          |

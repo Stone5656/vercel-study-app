@@ -35,12 +35,12 @@
 
 ## 要望と設計候補の区別
 
-- 初期スコープを単一ルームとする。
-- 定員をユーザー名でなく Socket 接続単位で数える。同一ユーザーの別タブも別接続とする。
-- 表示名 1〜30、コメント 1〜2,000 Unicode コードポイントを暫定候補とする。
+- 実装スコープは単一 `lobby` ルーム、5 Socket接続。別tabは別接続。
+- 表示名はtrim後1〜30、コメントはtrim後1〜2,000 Unicodeコードポイント。
 - 表示名は公開用ラベルであり、本人確認・認可を提供しない。
+- 投稿IDはDBのBIGINT、wireでは10進文字列。履歴は最新20件を古い順に表示する。
 - Socket の入室 ack で認証済み参加者に履歴を返す案を第一候補とする。
-- Neon/PostgreSQL を共有イベント・席管理に再利用する案を第一候補とする。ただし Neon pooled endpoint は `LISTEN/NOTIFY` 非対応のため、実装可能性・接続方式・接続数を先に確定する。
-- 公開環境では安全性、Vercel 配置、共有状態の動作を確認するまでチャットを fail-closed で停止する。
+- Socket.IO Postgres AdapterとPostgreSQL共有席を採用する。ただし実Neon/Vercel適合性は未確認。Adapterはsession接続、通常SQLは別Poolとし、transaction-pooling endpointでLISTEN/NOTIFYを行わない。
+- 公開環境は明示的な許可がない限り停止する。
 
 この候補は要望そのものではなく、要件・設計レビューで変更可能である。

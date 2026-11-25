@@ -1,61 +1,49 @@
-# リアルタイムチャット 試験結果記録（テンプレート）
+# リアルタイムチャット 試験結果記録テンプレート
 
-## 状態
+## 現在の状態
 
-これは試験前の記録テンプレートである。文書作成時点でチャット実装・依存追加・DDL適用は行っていない。従って、ここに定義されたすべての試験は **未実施（NOT RUN）**。PR CIや既存アプリの試験成功を、チャット要件の合格と解釈しない。
+PR #13で仕様文書を確定するための資料。chat implementation/DDL/adapters/testsはまだ作成していない。よって **TST-01〜TST-40はすべてNOT RUN**。このbranchで実施した既存アプリの103 server test/lint/typecheck/buildは、Chat testのPASSではない。
 
-## 実行環境記録
+## 実行環境
 
-| 項目                                      | 記録             |
-| ----------------------------------------- | ---------------- |
-| Commit / branch                           | 未実施           |
-| 実行日時・timezone                        | 未実施           |
-| Node / pnpm                               | 未実施           |
-| 試験レイヤー                              | 未実施           |
-| DB種別・branch/database（接続秘密なし）   | 該当なし・未実施 |
-| Vercel project/runtime/region/maxDuration | 未確認           |
-| Deployment Protection（HTTP/upgrade双方） | 未確認           |
+| 項目                                       | 記録                                                         |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| Branch / commit                            | docs branch `feature/realtime-chat-docs` / 記録時点PR13 head |
+| Node.js / pnpm                             | Chat test未実施のため記録なし                                |
+| DB                                         | 未接続。Neon DDL未実行                                       |
+| Vercel project/runtime/maxDuration         | 未確認                                                       |
+| Preview protection (page/socket handshake) | 未確認                                                       |
+| Chat package/adaptor version               | 未導入                                                       |
 
-## TST-01〜TST-35 実施記録
+## TST-01〜TST-40
 
-| TST            | 状態    | 結果・証跡                                           |
-| -------------- | ------- | ---------------------------------------------------- |
-| TST-01〜TST-35 | NOT RUN | チャット機能は未実装。各ケースの実装後に個別記録する |
+| 試験           | 状態    | 実測結果                                     |
+| -------------- | ------- | -------------------------------------------- |
+| TST-01〜TST-40 | NOT RUN | Chat実装前。taskごとの実測結果を追記すること |
 
-## 既存アプリ baseline
+## 今後必ず区別する証跡
 
-| 項目                       | 状態                      | 結果                                               |
-| -------------------------- | ------------------------- | -------------------------------------------------- |
-| `pnpm lint`                | NOT RUN in this docs task | 今回の範囲は文書のみ                               |
-| `pnpm typecheck`           | NOT RUN in this docs task | 今回の範囲は文書のみ                               |
-| `pnpm format:check`        | NOT RUN in this docs task | 文書整形検証はPR作成前に実施予定。結果をここへ追記 |
-| `pnpm test`                | NOT RUN in this docs task | 既存コードは変更していない                         |
-| `pnpm build`               | NOT RUN in this docs task | 既存コードは変更していない                         |
-| TODO/AI/TOP/404 regression | NOT RUN in this docs task | チャット統合後に実施                               |
+1. Unit/server mocks
+2. Playwright browser test with real local Socket.IO
+3. Disposable PostgreSQL schema/transaction tests
+4. Two independent local Node server processes and a shared disposable PostgreSQL Adapter
+5. Operator manual tests against Neon branch (never include credentials)
+6. Protected Vercel Preview and actual function duration/route tests
 
-## 環境依存の未確認項目
+Disposable PostgreSQL success does not prove Neon direct endpoint, Preview, or public protection. Adapter mocked success does not prove cross-process event delivery. A committed DB row does not prove each participant received a live event.
 
-- Protected PreviewでのWebSocket upgradeと Socket.IO Function path routing
-- Vercel projectのNode runtime、Fluid Compute、実効 `maxDuration`、Function entry / route mapping
-- WebSocket close-at-duration後の再接続先、同一room join、履歴復元
-- Neonの採用接続endpointが Postgres Adapter の `LISTEN/NOTIFY` に適する session connectionであること
-- Neon connection limitsとVercel instance scale-out時の listener + app Pool 合計
-- Neon DDL適用、adapter補助tableの定義、seat lease同時更新、異常終了後の回収
-- cross-instance event delivery、transaction commitとbroadcastの間のクラッシュ窓
-- 公開環境のチャット停止guardと、既存AI/TODO機能が継続すること
-- retention/deletion/abuse prevention policy
-
-## 結果追記用フォーマット
+## 記録フォーマット
 
 ```text
 TST-ID:
 State: PASS / FAIL / BLOCKED / NOT RUN
-Layer: unit / disposable PostgreSQL / local multi-process / browser / protected Preview / manual
+Layer: unit / browser / disposable PostgreSQL / multi-process / Neon manual / Vercel Preview
 Commit:
-Run date/time and timezone:
-Command or procedure:
-Count / passed / failed:
-Observed result:
-Evidence location (no secrets):
-Limitations / follow-up:
+Date/time and timezone:
+Command or exact steps:
+Test count / pass / fail:
+Observed behavior:
+DB target (kind and branch/database label only; never URL):
+Evidence location (no credentials or message body):
+Limitations / next action:
 ```
