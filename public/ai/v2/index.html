@@ -89,9 +89,28 @@
               disabled
             ></textarea>
             <p id="question-help" class="muted">
-              追加質問の送信は次の実装タスクで有効になります。
+              質問は1〜2,000文字で入力してください。
             </p>
-            <button type="submit" disabled>質問を送信</button>
+            <button id="submit-question" type="submit" disabled>
+              質問を送信
+            </button>
+            <p
+              id="submit-status"
+              class="status"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <section
+              id="latest-answer"
+              class="latest-answer"
+              aria-live="polite"
+              hidden
+            >
+              <h3>最新の回答</h3>
+              <p id="latest-answer-prompt" class="answer"></p>
+              <p id="latest-answer-response" class="answer"></p>
+              <time id="latest-answer-created-at"></time>
+            </section>
           </form>
         </section>
       </div>

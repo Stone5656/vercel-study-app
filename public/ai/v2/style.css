@@ -233,6 +233,24 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.latest-answer {
+  padding: 16px;
+  border: 1px solid #cbd8f5;
+  border-radius: 10px;
+  background: #f4f7ff;
+}
+
+.latest-answer h3 {
+  margin: 0 0 10px;
+}
+
+.latest-answer time {
+  display: block;
+  margin-top: 8px;
+  color: #657089;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 720px) {
   .page-shell {
     padding-top: 24px;

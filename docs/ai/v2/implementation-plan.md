@@ -97,6 +97,8 @@
 - **実装**: client title/prompt/body byte checks、submit `POST turns`、in-flight guard、valid 201 DTO check、success-only input clear、answer append and list/history refresh、known fixed error messages、failure/timeout input preservation and no retry.
 - **試験**: UI route mockでsuccess, malformed 201, AI/DB/disabled, bad network, timeout(clock), repeated submit, POST中の会話切替無効化, XSS question/response, history refresh failure, 409 context conflict.
 - **完了条件**: UI受入条件をすべてmock E2Eで満たし、post-commit uncertaintyを再送させない。
+- **実測結果**: 2026-11-25、Chromium Playwright suite 16/16成功。成功/履歴再取得、保存後GET障害、validation/連打/locked operations、502/503固定文、45秒POST/15秒GET clock timeout、network/malformed 201不確定表示、XSS風prompt/response text描画をmockで確認。
+- **状態**: 完了。実Gemini/Neonとの結合はTASK-V2-08でも行わず未実施。
 
 ### TASK-V2-08：V1/TODO回帰・統合レビュー・運用資料
 

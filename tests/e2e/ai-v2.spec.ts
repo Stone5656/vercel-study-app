@@ -217,7 +217,7 @@ test('discards an older history response after switching conversations', async (
   await expect(page.getByText('current')).toBeVisible();
 });
 
-test('renders title and turn text safely and keeps question submission disabled', async ({
+test('renders title and turn text safely and rejects an empty question without submission', async ({
   page,
 }) => {
   await mockV2Api(page, [conversation(1, '<img src=x onerror=alert(1)>')], {
@@ -252,8 +252,8 @@ test('renders title and turn text safely and keeps question submission disabled'
     page.locator('#conversation-list img, #turn-list img, #turn-list script'),
   ).toHaveCount(0);
   await expect(page.locator('script:not([src])')).toHaveCount(0);
-  await expect(page.locator('#question-prompt')).toBeDisabled();
-  await expect(page.locator('#question-form button')).toBeDisabled();
+  await expect(page.locator('#question-prompt')).toBeEnabled();
+  await expect(page.locator('#question-form button')).toBeEnabled();
   await page.locator('#question-form').evaluate((form) => {
     form.dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true }),
@@ -281,4 +281,438 @@ test('distinguishes a disabled API from an empty conversation list', async ({
     'AI会話機能は現在利用できません。',
   );
   await expect(page.getByText('private detail')).toHaveCount(0);
+});
+
+async function setupAskPage(
+  page: Page,
+  handlers: {
+    post?: (route: Route) => Promise<void>;
+    getTurns?: (route: Route, call: number) => Promise<void>;
+  } = {},
+): Promise<{ getTurnsCalls: () => number }> {
+  let getTurnsCalls = 0;
+  await page.route('**/api/ai/v2/conversations', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, items: [conversation(1)] }),
+    }),
+  );
+  await page.route('**/api/ai/v2/conversations/1/turns', async (route) => {
+    if (route.request().method() === 'POST') {
+      await handlers.post?.(route);
+      return;
+    }
+    getTurnsCalls += 1;
+    if (handlers.getTurns) {
+      await handlers.getTurns(route, getTurnsCalls);
+      return;
+    }
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, items: [] }),
+    });
+  });
+  await page.goto('/ai/v2/');
+  await expect(page.locator('#question-prompt')).toBeEnabled();
+  return { getTurnsCalls: () => getTurnsCalls };
+}
+
+function savedTurnPayload(prompt: string, response = 'Saved response') {
+  return {
+    success: true,
+    item: {
+      id: 2,
+      conversationId: 1,
+      prompt,
+      response,
+      createdAt: date,
+    },
+  };
+}
+
+test('submits a question, renders the saved response and refreshes history', async ({
+  page,
+}) => {
+  let postCalls = 0;
+  let getCalls = 0;
+  const prompt = 'How is this stored?';
+  await setupAskPage(page, {
+    async post(route) {
+      postCalls += 1;
+      expect(route.request().postDataJSON()).toEqual({ prompt });
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(savedTurnPayload(prompt)),
+      });
+    },
+    async getTurns(route, call) {
+      getCalls = call;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          items: call > 1 ? [{ ...savedTurnPayload(prompt).item }] : [],
+        }),
+      });
+    },
+  });
+  await page.locator('#question-prompt').fill(prompt);
+  await page.getByRole('button', { name: '質問を送信' }).click();
+
+  await expect(page.locator('#latest-answer-response')).toHaveText(
+    'Saved response',
+  );
+  await expect(page.locator('#question-prompt')).toHaveValue('');
+  await expect(page.locator('#latest-answer-prompt')).toHaveText(prompt);
+  await expect.poll(() => postCalls).toBe(1);
+  await expect.poll(() => getCalls).toBe(2);
+});
+
+test('keeps the saved answer when the post-save history refresh fails', async ({
+  page,
+}) => {
+  const prompt = 'Saved despite refresh issue';
+  let getCalls = 0;
+  await setupAskPage(page, {
+    async post(route) {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(savedTurnPayload(prompt, 'Answer retained')),
+      });
+    },
+    async getTurns(route, call) {
+      getCalls = call;
+      if (call === 1) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, items: [] }),
+        });
+      } else {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            error: { code: 'DB_UNAVAILABLE', message: 'private db detail' },
+          }),
+        });
+      }
+    },
+  });
+  await page.locator('#question-prompt').fill(prompt);
+  await page.getByRole('button', { name: '質問を送信' }).click();
+
+  await expect(page.locator('#latest-answer-response')).toHaveText(
+    'Answer retained',
+  );
+  await expect(page.locator('#submit-status')).toHaveText(
+    '回答は保存されましたが、履歴の更新に失敗しました。',
+  );
+  await expect(page.locator('#question-prompt')).toHaveValue('');
+  await expect(page.getByRole('button', { name: '質問を送信' })).toBeEnabled();
+  expect(getCalls).toBe(2);
+  await expect(page.getByText('private db detail')).toHaveCount(0);
+});
+
+test('rejects invalid prompt values without a POST', async ({ page }) => {
+  let postCalls = 0;
+  await setupAskPage(page, {
+    async post(route) {
+      postCalls += 1;
+      await route.fulfill({ status: 500, body: '{}' });
+    },
+  });
+  const input = page.locator('#question-prompt');
+  const submit = page.getByRole('button', { name: '質問を送信' });
+
+  await input.fill('   ');
+  await submit.click();
+  await expect(page.locator('#submit-status')).toHaveText(
+    '質問は空白以外の文字を1〜2,000文字で入力してください。',
+  );
+  await input.fill('😀'.repeat(2001));
+  await submit.click();
+  await expect(page.locator('#submit-status')).toHaveText(
+    '質問は空白以外の文字を1〜2,000文字で入力してください。',
+  );
+  expect(postCalls).toBe(0);
+});
+
+test('locks the form during submission and ignores duplicate submit events', async ({
+  page,
+}) => {
+  let finishPost = (): void => undefined;
+  const postWaiting = new Promise<void>((resolve) => {
+    finishPost = resolve;
+  });
+  let postCalls = 0;
+  await setupAskPage(page, {
+    async post(route) {
+      postCalls += 1;
+      await postWaiting;
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(savedTurnPayload('once')),
+      });
+    },
+  });
+  await page.locator('#question-prompt').fill('once');
+  await page.getByRole('button', { name: '質問を送信' }).click();
+  await expect(page.locator('#submit-status')).toHaveText(
+    '回答を生成しています。',
+  );
+  await expect(page.getByRole('button', { name: '質問を送信' })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: /Conversation 1/ }),
+  ).toBeDisabled();
+  await expect(page.getByRole('button', { name: '会話を作成' })).toBeDisabled();
+  await page.locator('#question-form').evaluate((form) => {
+    form.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    );
+  });
+  await expect.poll(() => postCalls).toBe(1);
+  finishPost();
+  await expect(page.locator('#latest-answer-response')).toHaveText(
+    'Saved response',
+  );
+});
+
+test('retains input and maps API error codes to fixed safe messages', async ({
+  browser,
+}) => {
+  const errors = [
+    [400, 'VALIDATION_ERROR', '入力内容を確認してください。'],
+    [400, 'INVALID_JSON', '通信内容を確認できませんでした。'],
+    [
+      413,
+      'PAYLOAD_TOO_LARGE',
+      '質問が長すぎます。短くしてからお試しください。',
+    ],
+    [415, 'UNSUPPORTED_MEDIA_TYPE', '通信形式に問題があります。'],
+    [502, 'AI_UNAVAILABLE', 'AIから回答を取得できませんでした。'],
+    [
+      503,
+      'DB_UNAVAILABLE',
+      'データベースを利用できません。履歴を確認してください。',
+    ],
+    [503, 'DEMO_DISABLED', 'AI会話機能は現在利用できません。'],
+    [
+      404,
+      'CONVERSATION_NOT_FOUND',
+      '会話が見つかりません。会話一覧を更新してください。',
+    ],
+    [
+      409,
+      'CONVERSATION_CHANGED',
+      '会話が更新されました。履歴を確認してから質問してください。',
+    ],
+    [
+      500,
+      'INTERNAL_ERROR',
+      '処理中にエラーが発生しました。時間をおいてお試しください。',
+    ],
+  ] as const;
+
+  for (const [status, code, message] of errors) {
+    const context = await browser.newContext();
+    const errorPage = await context.newPage();
+    await setupAskPage(errorPage, {
+      async post(route) {
+        await route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            error: { code, message: 'private server message' },
+          }),
+        });
+      },
+    });
+    await errorPage.locator('#question-prompt').fill('keep this input');
+    await errorPage.getByRole('button', { name: '質問を送信' }).click();
+    await expect(errorPage.locator('#submit-status')).toHaveText(message);
+    await expect(errorPage.locator('#question-prompt')).toHaveValue(
+      'keep this input',
+    );
+    await expect(errorPage.getByText('private server message')).toHaveCount(0);
+    await expect(
+      errorPage.getByRole('button', { name: '質問を送信' }),
+    ).toBeEnabled();
+    await context.close();
+  }
+});
+
+test('shows an uncertain result on POST timeout without automatic retry', async ({
+  page,
+}) => {
+  await page.clock.install();
+  let postCalls = 0;
+  let finishPost = (): void => undefined;
+  const waiting = new Promise<void>((resolve) => {
+    finishPost = resolve;
+  });
+  await setupAskPage(page, {
+    async post(route) {
+      postCalls += 1;
+      await waiting;
+      try {
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify(savedTurnPayload('maybe saved')),
+        });
+      } catch {
+        // The page intentionally aborts this request when the browser timeout expires.
+      }
+    },
+  });
+  await page.locator('#question-prompt').fill('maybe saved');
+  await page.getByRole('button', { name: '質問を送信' }).click();
+  await expect(page.locator('#submit-status')).toHaveText(
+    '回答を生成しています。',
+  );
+  await page.clock.fastForward(45_000);
+
+  await expect(page.locator('#submit-status')).toHaveText(
+    '45秒以内に応答がありませんでした。保存結果は不明です。再送せず、履歴を確認してください。',
+  );
+  await expect(page.locator('#question-prompt')).toHaveValue('maybe saved');
+  await expect(page.getByRole('button', { name: '質問を送信' })).toBeEnabled();
+  expect(postCalls).toBe(1);
+  finishPost();
+});
+
+test('timeout during post-save history refresh preserves response and unlocks controls', async ({
+  page,
+}) => {
+  await page.clock.install();
+  let finishHistory = (): void => undefined;
+  const historyWaiting = new Promise<void>((resolve) => {
+    finishHistory = resolve;
+  });
+  await setupAskPage(page, {
+    async post(route) {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(savedTurnPayload('saved', 'still visible')),
+      });
+    },
+    async getTurns(route, call) {
+      if (call === 1) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, items: [] }),
+        });
+        return;
+      }
+      await historyWaiting;
+      try {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, items: [] }),
+        });
+      } catch {
+        // History fetch has been locally aborted by the UI timeout.
+      }
+    },
+  });
+  await page.locator('#question-prompt').fill('saved');
+  await page.getByRole('button', { name: '質問を送信' }).click();
+  await expect(page.locator('#latest-answer-response')).toHaveText(
+    'still visible',
+  );
+  await page.clock.fastForward(15_000);
+
+  await expect(page.locator('#submit-status')).toHaveText(
+    '回答は保存されましたが、履歴の更新に失敗しました。',
+  );
+  await expect(page.locator('#latest-answer-response')).toHaveText(
+    'still visible',
+  );
+  await expect(page.getByRole('button', { name: '質問を送信' })).toBeEnabled();
+  await expect(page.locator('#turns-content')).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
+  finishHistory();
+});
+
+test('renders HTML-like question and answer only as text', async ({ page }) => {
+  const prompt = '<img src=x onerror=alert(1)>';
+  const answer = '<script>window.compromised = true</script>';
+  await setupAskPage(page, {
+    async post(route) {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(savedTurnPayload(prompt, answer)),
+      });
+    },
+  });
+  await page.locator('#question-prompt').fill(prompt);
+  await page.getByRole('button', { name: '質問を送信' }).click();
+
+  await expect(page.locator('#latest-answer-prompt')).toHaveText(prompt);
+  await expect(page.locator('#latest-answer-response')).toHaveText(answer);
+  await expect(
+    page.locator('#latest-answer img, #latest-answer script'),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(() => Reflect.get(window, 'compromised')),
+  ).toBeUndefined();
+});
+
+test('treats malformed 201 and network failure as uncertain without retry', async ({
+  browser,
+}) => {
+  const cases: Array<{
+    name: string;
+    routePost: (route: Route) => Promise<void>;
+  }> = [
+    {
+      name: 'malformed 201 response',
+      async routePost(route) {
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: '{',
+        });
+      },
+    },
+    {
+      name: 'network failure',
+      async routePost(route) {
+        await route.abort('failed');
+      },
+    },
+  ];
+
+  for (const testCase of cases) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    let postCalls = 0;
+    await setupAskPage(page, {
+      async post(route) {
+        postCalls += 1;
+        await testCase.routePost(route);
+      },
+    });
+    await page.locator('#question-prompt').fill(testCase.name);
+    await page.getByRole('button', { name: '質問を送信' }).click();
+
+    await expect(page.locator('#submit-status')).toContainText(
+      '保存されている可能性があるため、再送せず履歴を確認してください。',
+    );
+    await expect(page.locator('#question-prompt')).toHaveValue(testCase.name);
+    await expect(
+      page.getByRole('button', { name: '質問を送信' }),
+    ).toBeEnabled();
+    expect(postCalls).toBe(1);
+    await context.close();
+  }
 });

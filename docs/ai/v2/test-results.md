@@ -52,6 +52,14 @@
 - route mockで会話一覧/新規作成/選択切替/各会話履歴の分離、loading/empty、遅れて到着した古い履歴応答の破棄、固定された公開停止案内、XSS風タイトル/質問/回答のプレーンテキスト表示、未実装質問フォームのdisabled/non-submitを確認。
 - 実Neon/Gemini/Vercel環境は未確認。
 
+## TASK-V2-07 追加質問UI（2026-11-25）
+
+- V2 Playwright route-mock suite: 16/16成功（Chromium）。既存会話管理7件を維持し、質問送信と状態テストを追加。
+- 正常201後の回答描画/入力クリア/GET再取得、POST成功後のGET障害で回答を残し警告、空白/2,001コードポイントをPOSTなしで拒否、JSON bytes検査、送信中の連打/会話選択/作成防止、既知HTTP error codeの固定文、失敗時入力保持を確認。
+- Playwright ClockでPOST 45秒、履歴GET 15秒の期限を進め、再送なし、POSTは保存結果不明を表示して入力保持、履歴timeoutでは回答保持・履歴loading解除・操作復帰を確認。
+- 不正/parse不能201とネットワーク失敗も「保存の可能性あり」として自動再送なし。質問/回答のHTML風文字列はtextContentで表示されDOM要素を生成しない。
+- 外部Gemini、実Neon、Preview/Productionの実環境動作は未実施。
+
 TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共有`requirePool()`、V1 AI router、TODO V1/V2が存在し、V2コード/DDLはなかった。既存実機Neon/Gemini、Vercel Dashboard、実DB TODO E2Eは未確認。
 
 ## 要件別試験状況
@@ -64,7 +72,7 @@ TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共�
 | REQ-V2-004 最新5往復のGemini文脈 | 一部実施 | SDK boundary mockで最新5・同一context/current question確認   |
 | REQ-V2-005 入力/16KiB            | 一部実施 | title/parserに加え質問trim/Unicode境界をAPI mock確認         |
 | REQ-V2-006 AI→DB commit→201/競合 | 一部実施 | API/Model mockでcommit待機、AI/DB失敗、context競合を確認     |
-| REQ-V2-007 UI状態                | 一部実施 | UI route mockで会話作成/選択/履歴状態、raceを確認            |
+| REQ-V2-007 UI状態                | 一部実施 | 会話UI/質問送信状態、timeout/race/再送防止をroute mock確認   |
 | REQ-V2-008 V2 DB分離             | 一部実施 | V2専用DDLとModel SQL/transaction mock確認。Neon未適用        |
 | REQ-V2-009 XSS/秘密              | 一部実施 | UI mockでtitle/question/responseのtext描画・要素未生成確認   |
 | REQ-V2-010 公開停止/回帰         | 一部実施 | ガード条件とModel呼出0をSupertest確認。V1/TODO回帰は最終TASK |
