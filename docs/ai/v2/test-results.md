@@ -27,23 +27,30 @@
 - NeonへのDDL適用・接続・データ変更は未実施。使い捨てPostgreSQLの結果を実Neon確認済みとは扱わない。
 - `pnpm typecheck`は成功。TASK-V2-02完了時のlint/format/全server test/buildは、後続タスクと最終統合時にも再実行する。
 
+## TASK-V2-03 会話作成/一覧API・公開ガード（2026-11-25）
+
+- Supertestで作成201/保存済みDTO、trim、Unicodeコードポイント1/50境界、空白/欠落/型違い/51文字、invalid JSON、16 KiB超過、非JSON、空一覧、DB障害固定503を検証。
+- 公開ガードは`NODE_ENV=development`かつ`AI_V2_DEMO_ENABLED=true`かつ`VERCEL_ENV`未設定の場合のみ通過。NODE_ENV未設定/test/production、flag false、Vercel Preview/Productionで503 `DEMO_DISABLED`かつModel呼出0を検証。ガードがparserより先に実行されることも確認。
+- APIテスト8/8成功。`pnpm lint`、`pnpm typecheck`成功。TODO/V1回帰と全suiteは後続/最終統合で再実行する。
+- 実Neon、Gemini、Vercel設定の確認は未実施。
+
 TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共有`requirePool()`、V1 AI router、TODO V1/V2が存在し、V2コード/DDLはなかった。既存実機Neon/Gemini、Vercel Dashboard、実DB TODO E2Eは未確認。
 
 ## 要件別試験状況
 
-| 要件                             | 状態     | 証跡                                                  |
-| -------------------------------- | -------- | ----------------------------------------------------- |
-| REQ-V2-001 会話作成              | 一部実施 | Model mockでINSERT/DTOを確認。APIはTASK-V2-03         |
-| REQ-V2-002 一覧/再開             | 一部実施 | 一覧SQL/DTOはModel mock確認。API/UIはTASK-V2-03/06    |
-| REQ-V2-003 履歴保存/最新20       | 一部実施 | Model mockで最新20/順序確認。HTTP/UIはTASK-V2-04/06   |
-| REQ-V2-004 最新5往復のGemini文脈 | 未実施   | TASK-V2-05以降で記録                                  |
-| REQ-V2-005 入力/16KiB            | 未実施   | TASK-V2-03/05/07以降で記録                            |
-| REQ-V2-006 AI→DB commit→201/競合 | 未実施   | TASK-V2-05/07以降で記録                               |
-| REQ-V2-007 UI状態                | 未実施   | TASK-V2-06/07以降で記録                               |
-| REQ-V2-008 V2 DB分離             | 一部実施 | V2専用DDLとModel SQL/transaction mock確認。Neon未適用 |
-| REQ-V2-009 XSS/秘密              | 未実施   | TASK-V2-06/07/08以降で記録                            |
-| REQ-V2-010 公開停止/回帰         | 未実施   | TASK-V2-03/08以降で記録                               |
-| REQ-V2-011 固定エラー契約        | 未実施   | TASK-V2-03〜05/08以降で記録                           |
+| 要件                             | 状態     | 証跡                                                         |
+| -------------------------------- | -------- | ------------------------------------------------------------ |
+| REQ-V2-001 会話作成              | 一部実施 | Model/API mockでINSERT/DTO、入力境界確認。Neon未確認         |
+| REQ-V2-002 一覧/再開             | 一部実施 | 一覧SQL/API mock確認。選択UIはTASK-V2-06                     |
+| REQ-V2-003 履歴保存/最新20       | 一部実施 | Model mockで最新20/順序確認。HTTP/UIはTASK-V2-04/06          |
+| REQ-V2-004 最新5往復のGemini文脈 | 未実施   | TASK-V2-05以降で記録                                         |
+| REQ-V2-005 入力/16KiB            | 未実施   | TASK-V2-03/05/07以降で記録                                   |
+| REQ-V2-006 AI→DB commit→201/競合 | 未実施   | TASK-V2-05/07以降で記録                                      |
+| REQ-V2-007 UI状態                | 未実施   | TASK-V2-06/07以降で記録                                      |
+| REQ-V2-008 V2 DB分離             | 一部実施 | V2専用DDLとModel SQL/transaction mock確認。Neon未適用        |
+| REQ-V2-009 XSS/秘密              | 未実施   | TASK-V2-06/07/08以降で記録                                   |
+| REQ-V2-010 公開停止/回帰         | 一部実施 | ガード条件とModel呼出0をSupertest確認。V1/TODO回帰は最終TASK |
+| REQ-V2-011 固定エラー契約        | 一部実施 | TASK-V2-03の入力/parser/DB error契約をSupertest確認          |
 
 ## 実環境確認（未実施）
 

@@ -53,6 +53,8 @@
 - **実装**: V2専用16KiB JSON parser、Content-Type/parser errors、local-only guard、POST conversation、GET list。title trim/codepoint検証、固定エラーDTO。
 - **試験**: Supertestでtitle 1/50/51境界、補助Unicode、空白、type、bad JSON、413、415、順序、DB/内部エラー。`NODE_ENV` undefined/development/production、`VERCEL_ENV` unset/preview/production、flag true/falseを組合せ、development+flag true+Vercel env unset以外は停止しModel呼出0を確認。既存V1/TODO parser error testsも実行。
 - **完了条件**: endpoint契約どおりのDTO/status、invalid bodyでDB 0回、Preview/Production/非development/不明環境で全V2 APIが停止。
+- **実測結果**: 2026-11-25、Supertest 8/8成功。タイトルtrim/Unicode境界、parser異常、Model障害、local-only guardの環境組合せ、guard先行を確認。lint/typecheck成功。
+- **状態**: 完了。既存V1/TODO全suite回帰はTASK-V2-08で再実行する。
 
 ### TASK-V2-04：選択会話の履歴API
 

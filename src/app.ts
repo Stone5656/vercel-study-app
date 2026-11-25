@@ -4,6 +4,7 @@ import express, { type Request, type Response } from 'express';
 
 import path from 'node:path';
 import { createAiRouter } from './apps/ai/aiRouter.js';
+import { createAiV2Router } from './apps/ai/v2/aiV2Router.js';
 import { requirePool } from './db.js';
 import {
   createTodoRouter,
@@ -18,6 +19,9 @@ type Product = {
 };
 
 const app = express();
+
+// V2 must own its guard and 16 KiB parser before shared body parsers run.
+app.use(createAiV2Router());
 
 app.use(
   express.urlencoded({
