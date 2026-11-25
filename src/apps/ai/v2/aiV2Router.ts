@@ -29,6 +29,11 @@ export function createAiV2Router(
     demoGuard,
     controller.listConversations,
   );
+  router.get(
+    '/api/ai/v2/conversations/:conversationId/turns',
+    demoGuard,
+    controller.listTurns,
+  );
 
   return router;
 }

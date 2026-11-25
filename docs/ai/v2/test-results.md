@@ -34,6 +34,12 @@
 - APIテスト8/8成功。`pnpm lint`、`pnpm typecheck`成功。TODO/V1回帰と全suiteは後続/最終統合で再実行する。
 - 実Neon、Gemini、Vercel設定の確認は未実施。
 
+## TASK-V2-04 選択会話の履歴API（2026-11-25）
+
+- Supertest 6/6成功。ID 1およびPostgreSQL INTEGER上限2,147,483,647を受理。0、先頭ゼロ、符号、指数表記、上限超過、安全整数超過をDB照会前に400で拒否。
+- 有効な会話の履歴をModel順で返却し、空履歴200と存在しない会話404を区別。Modelの固定DB障害503と想定外500を確認。
+- 最新20ターン/同時刻ID tie-break/古い順DTOはTASK-V2-02 Model SQL/mockで確認済み。Neonは未実施。
+
 TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共有`requirePool()`、V1 AI router、TODO V1/V2が存在し、V2コード/DDLはなかった。既存実機Neon/Gemini、Vercel Dashboard、実DB TODO E2Eは未確認。
 
 ## 要件別試験状況
@@ -42,7 +48,7 @@ TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共�
 | -------------------------------- | -------- | ------------------------------------------------------------ |
 | REQ-V2-001 会話作成              | 一部実施 | Model/API mockでINSERT/DTO、入力境界確認。Neon未確認         |
 | REQ-V2-002 一覧/再開             | 一部実施 | 一覧SQL/API mock確認。選択UIはTASK-V2-06                     |
-| REQ-V2-003 履歴保存/最新20       | 一部実施 | Model mockで最新20/順序確認。HTTP/UIはTASK-V2-04/06          |
+| REQ-V2-003 履歴保存/最新20       | 一部実施 | Model最新20/順序と履歴API/404をmock確認。UI/Neon未確認       |
 | REQ-V2-004 最新5往復のGemini文脈 | 未実施   | TASK-V2-05以降で記録                                         |
 | REQ-V2-005 入力/16KiB            | 未実施   | TASK-V2-03/05/07以降で記録                                   |
 | REQ-V2-006 AI→DB commit→201/競合 | 未実施   | TASK-V2-05/07以降で記録                                      |
@@ -50,7 +56,7 @@ TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共�
 | REQ-V2-008 V2 DB分離             | 一部実施 | V2専用DDLとModel SQL/transaction mock確認。Neon未適用        |
 | REQ-V2-009 XSS/秘密              | 未実施   | TASK-V2-06/07/08以降で記録                                   |
 | REQ-V2-010 公開停止/回帰         | 一部実施 | ガード条件とModel呼出0をSupertest確認。V1/TODO回帰は最終TASK |
-| REQ-V2-011 固定エラー契約        | 一部実施 | TASK-V2-03の入力/parser/DB error契約をSupertest確認          |
+| REQ-V2-011 固定エラー契約        | 一部実施 | 作成/一覧/履歴APIの入力/parser/DB/404をSupertest確認         |
 
 ## 実環境確認（未実施）
 

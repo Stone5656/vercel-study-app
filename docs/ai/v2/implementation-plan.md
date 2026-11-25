@@ -64,6 +64,8 @@
 - **実装**: GET turns、canonical正整数で最大2,147,483,647のID検証、最新20件取得を古→新へ返却、存在しないconversationの固定404。
 - **試験**: ID 1/max-int/max+1/zero/sign/exponent/leading-zero、0/1/20/21+ターン、同日時ID tie-break、昇順応答、会話間混入なし、DB障害、公開停止。Model/DB mockのみ。
 - **完了条件**: 一つの会話の最新20件だけが正順で返り、他会話データが混ざらない。
+- **実測結果**: 2026-11-25、Supertest 6/6成功。ID 1/max-int受理、非canonical/範囲外をDB呼出前に拒否、空履歴と404の区別、固定DB/内部エラーを確認。Modelテストで最新20件・昇順を確認。
+- **状態**: 完了。実Neonの会話/ターン存在・履歴は未確認。
 
 ### TASK-V2-05：直近5往復Gemini質問API
 
