@@ -110,7 +110,7 @@
 - **完了条件**: 全REQに自動/手動/実機の検証状態があり、mockを実環境合格と混同せず、既存TODO/AI V1回帰成功、公開API停止、未確認事項/運用制限を記録。
 - **実測結果**: 2026-11-25、`pnpm lint/typecheck/format:check/test/build`と`git diff --check`成功。server tests 103/103。AI V1履歴/質問、AI V2、TOPのChromium E2E suite 55/55、うちV2 E2E 17/17。使い捨てPostgreSQL 16でDDL新規作成/再実行、同名NOT VALID constraintと不一致indexのfail-closed/rollbackを確認。公開停止/secret static/XSS自動検査成功。
 - **レビュー**: 統合レビューでDDLの`NOT VALID` CHECK constraintを既存定義一致と誤認し得る点を発見。`convalidated`、PK/FKの遅延・参照動作をcatalog照合条件へ追加し、再試験成功。実Neon/Gemini/Vercel Productionの確認とは区別。
-- **状態**: コード・自動検証・文書完了。利用者の実Neon DDL適用、実Gemini、Preview/実運用結合は未完了。実機確認後にこのPRをレビュー/マージする。
+- **状態**: コード・自動検証・文書完了。後続の利用者報告ではローカルV2画面、会話作成、Gemini回答/追加質問、会話間分離、再読込再開、Neon `production` / `neondb`のDDL適用/定義照合/保存、一覧GET 200・作成POST 201・履歴GET 200・質問POST 201が成功。利用者手動確認として`test-results.md`へ記録し、Codexの実環境再検証とは区別する。Vercel Preview/Productionの実環境結合とrollback試験は未確認。
 
 ## 4. 実装中に決める必要がある未決事項
 
