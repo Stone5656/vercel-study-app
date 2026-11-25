@@ -54,7 +54,7 @@ URLは`/ai/v2/`。静的画面はAPI停止中でも表示可能だが、公開�
 5. 質問入力欄と送信ボタン。選択会話なしの場合は無効。
 6. 一覧/履歴の初期loading、空、disabled、失敗状態と、作成/送信中、回答、送信失敗状態。
 
-APIからの履歴順を表示し、client側でソートしない。会話切替時は選択IDを保持し、レスポンスを要求時の会話IDに紐付ける。古い会話の遅い応答で現在選択中の会話を上書きしない。質問、回答、会話名は`createElement`、`textContent`、`append`/`replaceChildren`で描画し、`innerHTML`は禁止。改行はCSS `white-space: pre-wrap`で保持する。
+APIからの履歴順を表示し、client側でソートしない。履歴GETには選択IDと世代番号を持たせ、切替後に到着した旧応答は破棄する。POST中は会話切替・新規作成・別質問をdisabledにし、リクエスト終了まで元の会話コンテキストを保つ。質問、回答、会話名は`createElement`、`textContent`、`append`/`replaceChildren`で描画し、`innerHTML`は禁止。改行はCSS `white-space: pre-wrap`で保持する。
 
 ## 5. API設計（DES-V2-003）
 
@@ -74,11 +74,15 @@ APIからの履歴順を表示し、client側でソートしない。会話切�
 
 `GET /api/ai/v2/conversations` → 200 `{ "success": true, "items": [ConversationDTO, ...] }`。SQL順は`updated_at DESC, id DESC`。
 
-### 5.3 選択会話の履歴
+### 5.3 Path ID検証
+
+`:conversationId`は`^[1-9][0-9]*$`に一致し、値が2,147,483,647以下のときだけ受理する。PostgreSQL signed `INTEGER`の上限を超えないよう、DB query前に数値変換・`Number.isSafeInteger`・正数・最大値を検査する。符号、指数表記、ゼロ、先頭ゼロ等は400 `VALIDATION_ERROR`。
+
+### 5.4 選択会話の履歴
 
 `GET /api/ai/v2/conversations/:conversationId/turns` → 200 `{ "success": true, "items": [TurnDTO, ...] }`。最新20往復をSQLで降順に取得し、API DTOは古い順（`created_at ASC, id ASC`相当）へ並べる。Turn DTOは`{ id, conversationId, prompt, response, createdAt }`。
 
-### 5.4 質問送信
+### 5.5 質問送信
 
 `POST /api/ai/v2/conversations/:conversationId/turns`
 
@@ -86,11 +90,13 @@ APIからの履歴順を表示し、client側でソートしない。会話切�
 { "prompt": "先ほどの案の次の手順は？" }
 ```
 
-処理順: gate→Content-Type/body parse→path ID/prompt validation→会話存在確認→同一会話の直近5ターン取得→Gemini回答生成→回答空チェック→DB transactionでturn INSERTとconversation.updated_at更新→201 Turn DTO。
+処理順: gate→Content-Type/body parse→path ID/prompt validation→会話存在確認→同一会話の直近5ターンとcontext version（最後のturn ID。履歴なしはnull）取得→Gemini回答生成→回答空チェック→DB transactionでconversation rowを`FOR UPDATE`し、最新turn IDがsnapshotと同じか検査→一致ならturn INSERTとconversation.updated_at更新→commit後に201 Turn DTO。不一致はrollback、409 `CONVERSATION_CHANGED`。
 
 DB確定前に201を返さない。Gemini失敗/空回答は保存しない。DB失敗は非201。UIは失敗時に入力を保持し自動再送しない。
 
-### 5.5 エラー契約
+同一ブラウザー画面ではPOST中に会話切替、新規作成、別質問を無効化する。別タブ/APIからの同時送信はDB transaction内のsnapshot比較で検出する。古い文脈で生成した回答を無言で同一会話へ追加しない。
+
+### 5.6 エラー契約
 
 | HTTP | code                     | 条件                          |
 | ---- | ------------------------ | ----------------------------- |
@@ -99,6 +105,7 @@ DB確定前に201を返さない。Gemini失敗/空回答は保存しない。DB
 | 413  | `PAYLOAD_TOO_LARGE`      | 16 KiB超                      |
 | 415  | `UNSUPPORTED_MEDIA_TYPE` | JSON以外                      |
 | 404  | `CONVERSATION_NOT_FOUND` | IDが存在しない                |
+| 409  | `CONVERSATION_CHANGED`   | 文脈取得後、保存前に履歴更新  |
 | 502  | `AI_UNAVAILABLE`         | API失敗、空回答、設定不足     |
 | 503  | `DB_UNAVAILABLE`         | DB接続/読込/transaction失敗   |
 | 503  | `DEMO_DISABLED`          | local flag offまたは公開環境  |
@@ -131,7 +138,7 @@ V1の単発ログを変更せず、V2専用の2表を新設する。
 
 索引案: `ai_v2_turns(conversation_id, created_at DESC, id DESC)`、`ai_v2_conversations(updated_at DESC, id DESC)`。外部キー削除動作は会話削除API対象外だが、将来手動削除時の安全性を考えてRESTRICT/NO ACTION相当とする。CHECK/PK/index/defaultはV1で導入したcatalog照合方式を参考にDDL内で不一致なら停止し、`IF NOT EXISTS`単独を一致判定に使わない。
 
-質問・回答の1ターンを1行に保存するため、両者の片方だけが残らない。ServiceはGemini後にClient transactionを開始し、turn insertとconversation timestamp updateを同じtransaction内で行う。失敗時ROLLBACKし、利用者へ201を返さない。外部AI成功後にDB失敗した場合はAI費用が発生しても非成功応答になりうることをUIで案内し、自動再送しない。
+質問・回答の1ターンを1行に保存するため、両者の片方だけが残らない。ServiceはGemini後にClient transactionを開始する。まずconversation rowを`SELECT ... FOR UPDATE`でロックし、そのstatement完了後の別statementで最新turn IDを読み、Gemini文脈取得時のsnapshotと比較する（READ COMMITTEDで最新コミットを可視化するため別statementにする）。一致する場合のみturn insertとconversation timestamp updateを同じtransaction内で行う。snapshotが異なればROLLBACKして409、DB失敗時もROLLBACKし201を返さない。外部AI成功後にDB失敗/競合した場合はAI費用が発生しても非成功応答になりうることをUIで案内し、自動再送しない。
 
 ### 履歴・文脈SQL順序
 
@@ -148,7 +155,7 @@ V1の単発ログを変更せず、V2専用の2表を新設する。
 
 ## 8. 公開停止と設定
 
-V2専用の`AI_V2_DEMO_ENABLED`を導入する。router guardは**最初に**`process.env.VERCEL_ENV`の存在を評価し、`preview`/`production`その他定義済み値すべてを503 `DEMO_DISABLED`で停止する。`AI_V2_DEMO_ENABLED=true`かつ`VERCEL_ENV`未定義のローカルだけ後続へ進める。未設定/falseは停止。V1の`AI_DEMO_ENABLED`判定を変更・流用しない。
+V2専用の`AI_V2_DEMO_ENABLED`を導入する。router guardは`VERCEL_ENV`が定義済み、`NODE_ENV !== 'development'`、またはflagがtrue以外なら503 `DEMO_DISABLED`で停止する。従ってVercel Preview/Production、非Vercel production、Node environment未設定/不明も停止し、明示的な`NODE_ENV=development`とflag trueのローカルだけを許す。非Vercelの運用環境では`NODE_ENV=production`を必須とする。V1の`AI_DEMO_ENABLED`判定を変更・流用しない。
 
 公開停止中は全`/api/ai/v2/*`でGemini/DB呼出し0回。静的`/ai/v2/`ページは配信されても、APIが停止中であることを説明する。Preview protectionがあるだけではV2有効化を許可せず、本要件では公開環境APIは停止を固定する。
 
@@ -156,8 +163,8 @@ V2専用の`AI_V2_DEMO_ENABLED`を導入する。router guardは**最初に**`pr
 
 - body parserはV2専用、16 KiB。V2 routerを共通urlencoded/JSON parserより先にmountし、V1/TODOのparserとerror handlerを変更しない。
 - prompt/titleはクライアントとサーバーの両方で検証し、サーバー値を正とする。長さ計算はtrim後の`Array.from(value).length`。
-- IDは正の安全な整数表現に限定し、SQLはparameterized。
-- 同じ会話からの送信はUIで一件に限定する。重複/同時タブ送信のグローバル順序保証や冪等APIは今回対象外として明記する。
+- IDはcanonicalな正の10進表現かつ`1..2_147_483_647`に限定し、SQLはparameterized。
+- 同一画面ではPOST中に切替/作成/次送信をロックする。別タブ/直接APIの競合はcontext snapshotをtransaction内で比較し、古くなった回答は409として保存しない。履歴GETは選択ID/世代を照合して旧応答を破棄する。冪等APIは対象外。
 - API status、JSON parse、DTO shapeをクライアントで検証。質問/回答/titleにHTMLを解釈させない。
 - 認証/ユーザー分離なしのため公開APIは禁止。error response/logにprompt、回答、API key、DATABASE_URL、SQL文字列を記録しない。
 - abort/ネットワーク障害時にDB結果が不明なら再送しない。会話履歴を再取得して確認するよう案内する。
