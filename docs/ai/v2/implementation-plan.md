@@ -42,6 +42,8 @@
 - **実装**: `ai_v2_conversations`と`ai_v2_turns`の非破壊DDL、1:多FK、検査可能なtitle/prompt/response制約、list/history/context query、DTO変換、shared pool、transaction insert+conversation update+rollback。既存表は変更しない。
 - **試験**: DDLを使い捨てPostgreSQLで新規作成/再実行/定義不一致時停止を検証。ModelはPool/Clientを依存注入しSQL、値、並び、limit、rollbackをmock検証。Neonは使わない。
 - **完了条件**: 2表の正確な定義とindex/制約をcatalog検査でき、旧表差分なし、Modelの成功/失敗/rollbackテストが通る。Neon適用の承認はこの完了に含めない。
+- **実測結果**: 2026-11-25、DDLを使い捨てDocker PostgreSQL 16で新規適用・再実行・同名CHECK制約不一致時の停止とatomic rollbackを確認。Modelテスト7/7、typecheck成功。Neon未接続/DDL未適用。
+- **状態**: 完了。Neon catalog照合と実データ検証は未実施。
 
 ### TASK-V2-03：会話作成・一覧APIと公開ガード
 

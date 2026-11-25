@@ -20,23 +20,30 @@
 | `pnpm build`        | 成功                                |
 | `git diff --check`  | 成功                                |
 
-既存構成はExpress 5/TypeScript ESM、`src/app.ts`、共有`requirePool()`、V1 AI router、TODO V1/V2。V2コード/DDLなし。既存実機Neon/Gemini、Vercel Dashboard、実DB TODO E2Eは未確認。
+## TASK-V2-02 DDL・Model（2026-11-25）
+
+- `sql/ai/040_create_ai_v2_tables.sql`を使い捨てDocker PostgreSQL 16で新規適用、再実行、同名CHECK制約不一致を試験した。新規作成・冪等再実行はいずれも成功。不一致時は例外で停止し、トランザクションrollbackで同時作成されかけた欠落テーブルも残らないことを確認した。
+- Model単体テストはNode.js Test Runnerで7/7成功。会話作成・一覧、最新20件の昇順返却、最新5件の文脈/version、transaction commit、context競合rollback、DB失敗rollback、安全なDB例外変換を依存注入mockで検証した。
+- NeonへのDDL適用・接続・データ変更は未実施。使い捨てPostgreSQLの結果を実Neon確認済みとは扱わない。
+- `pnpm typecheck`は成功。TASK-V2-02完了時のlint/format/全server test/buildは、後続タスクと最終統合時にも再実行する。
+
+TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共有`requirePool()`、V1 AI router、TODO V1/V2が存在し、V2コード/DDLはなかった。既存実機Neon/Gemini、Vercel Dashboard、実DB TODO E2Eは未確認。
 
 ## 要件別試験状況
 
-| 要件                             | 状態   | 証跡                        |
-| -------------------------------- | ------ | --------------------------- |
-| REQ-V2-001 会話作成              | 未実施 | TASK-V2-03以降で記録        |
-| REQ-V2-002 一覧/再開             | 未実施 | TASK-V2-03/04/06以降で記録  |
-| REQ-V2-003 履歴保存/最新20       | 未実施 | TASK-V2-02/04/06以降で記録  |
-| REQ-V2-004 最新5往復のGemini文脈 | 未実施 | TASK-V2-05以降で記録        |
-| REQ-V2-005 入力/16KiB            | 未実施 | TASK-V2-03/05/07以降で記録  |
-| REQ-V2-006 AI→DB commit→201/競合 | 未実施 | TASK-V2-05/07以降で記録     |
-| REQ-V2-007 UI状態                | 未実施 | TASK-V2-06/07以降で記録     |
-| REQ-V2-008 V2 DB分離             | 未実施 | TASK-V2-02以降で記録        |
-| REQ-V2-009 XSS/秘密              | 未実施 | TASK-V2-06/07/08以降で記録  |
-| REQ-V2-010 公開停止/回帰         | 未実施 | TASK-V2-03/08以降で記録     |
-| REQ-V2-011 固定エラー契約        | 未実施 | TASK-V2-03〜05/08以降で記録 |
+| 要件                             | 状態     | 証跡                                                  |
+| -------------------------------- | -------- | ----------------------------------------------------- |
+| REQ-V2-001 会話作成              | 一部実施 | Model mockでINSERT/DTOを確認。APIはTASK-V2-03         |
+| REQ-V2-002 一覧/再開             | 一部実施 | 一覧SQL/DTOはModel mock確認。API/UIはTASK-V2-03/06    |
+| REQ-V2-003 履歴保存/最新20       | 一部実施 | Model mockで最新20/順序確認。HTTP/UIはTASK-V2-04/06   |
+| REQ-V2-004 最新5往復のGemini文脈 | 未実施   | TASK-V2-05以降で記録                                  |
+| REQ-V2-005 入力/16KiB            | 未実施   | TASK-V2-03/05/07以降で記録                            |
+| REQ-V2-006 AI→DB commit→201/競合 | 未実施   | TASK-V2-05/07以降で記録                               |
+| REQ-V2-007 UI状態                | 未実施   | TASK-V2-06/07以降で記録                               |
+| REQ-V2-008 V2 DB分離             | 一部実施 | V2専用DDLとModel SQL/transaction mock確認。Neon未適用 |
+| REQ-V2-009 XSS/秘密              | 未実施   | TASK-V2-06/07/08以降で記録                            |
+| REQ-V2-010 公開停止/回帰         | 未実施   | TASK-V2-03/08以降で記録                               |
+| REQ-V2-011 固定エラー契約        | 未実施   | TASK-V2-03〜05/08以降で記録                           |
 
 ## 実環境確認（未実施）
 
