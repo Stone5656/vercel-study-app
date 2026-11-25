@@ -2,7 +2,7 @@
 
 ## 1. 運用ルール
 
-- 本書は実装計画であり、ここに記載するTASKは未着手。V2コード、DDL、DB適用、Gemini通信、デプロイは今回行っていない。
+- 本書は実装計画と進捗記録を兼ねる。TASKごとの着手/完了は各節に記録し、V2コード・DDL・DB適用・Gemini通信・デプロイの実施範囲を`test-results.md`でも区別する。
 - 実装はTASK順。前タスクの受入が失敗したら後続を開始せず、原因を直して再検証する。
 - V1/TODOのコードとDB表は保護する。環境/秘密値は読み取らず、実Gemini・Neon確認は別途明示した承認/試験手順に従う。
 - SQL生成と実DB適用は別工程。DDLをNeonに適用する場合は、差分・catalog照合・対象branch/databaseを利用者が確認し、明示承認後に行う。
@@ -31,6 +31,8 @@
 - **実装/確認**: 最新mainとブランチ状態を確認。既存`src/app.ts` route/parser順、AI V1 guard/service/model、shared `requirePool()`、TODO route/SQL、package scripts、公開環境停止条件を記録。V2用guardは`NODE_ENV=development`かつ`AI_V2_DEMO_ENABLED=true`、かつ`VERCEL_ENV`未設定の場合のみ許可し、それ以外は未設定/不明環境を含め停止する。
 - **試験**: 現行lint/typecheck/format/server tests/buildをbaselineとして実行。V1/TODOのroute/module/schema差分を保存。
 - **完了条件**: baseline結果と実装差分範囲が記録され、公開環境でV2 APIを有効化する経路がないことをレビューで確認する。
+- **実測結果**: 2026-11-25、branch `feature/ai-app-v2-implementation` / base `42db3e39e4f1eea117b0c2a74d6b8b61d55f8966`。lint/typecheck/format/build/diff-check成功、既存server tests 70/70成功。V2用guardを公開系統から独立させ、未設定環境も停止する方針をレビュー済み。
+- **状態/未確認**: 完了。Vercel環境設定、Neon/Gemini実機は対象外で未確認。実DB依存の既存TODO E2Eは実行しない。
 
 ### TASK-V2-02：V2 DDLとModel
 
