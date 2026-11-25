@@ -69,6 +69,26 @@ Gemini設定がない状態でもアプリと既存TODOは起動しますが、A
 
 FunctionのNode.js runtime、Fluid Compute、Functionの実効`maxDuration`はVercel Dashboardを確認できず未確認です。**Settings > Build and Deployment > Node.js Version**でruntimeを、Projectの**Functions Settings > Fluid Compute**でFluid Computeを、Function詳細で実効durationを確認してください。Gemini SDKのHTTP timeoutは30秒で、DB保存と応答に別途時間が必要です。Functionの実効上限が不明の間、30秒処理が収まると判断しないでください。`vercel.json`は追加していません。
 
+## AI会話アプリ V2（ローカル開発専用）
+
+`/ai/v2/`では話題ごとの会話を作成・切替し、選択中の会話の最新20ターンを表示できます。追加質問には同一会話の保存済み最新5ターンをGeminiへ渡します。会話/ターンはV1の`ai_qa_logs`とTODO表を変更せず、V2専用`ai_v2_conversations` / `ai_v2_turns`へ保存します。
+
+V2 APIは認証を実装していないため、`NODE_ENV=development`、`AI_V2_DEMO_ENABLED=true`、`VERCEL_ENV`未設定のすべてが揃ったローカル環境だけで有効です。Preview、Production、`NODE_ENV`不明/productionなどでは、flagに関係なくAPIは503 `DEMO_DISABLED`で停止します。V2は模擬Geminiを使わず、質問には実GeminiとDBが必要です。AI V1の`AI_DEMO_ENABLED` / `AI_MOCK_ENABLED`とは別設定です。
+
+ローカル起動前に、`.env`等のGit管理外の環境へ`DATABASE_URL`、`GEMINI_API_KEY`、`GEMINI_MODEL`、`AI_V2_DEMO_ENABLED=true`を設定してください。シェルの`NODE_ENV=development`を明示し、`VERCEL_ENV`が存在しないことを確認してから`pnpm dev`を起動し、`http://localhost:3000/ai/v2/`を開きます。秘密値をコマンド履歴、画面共有、ログ、Gitへ出さないでください。キーやDB設定がない場合もアプリ/TODOは起動しますが、V2 APIはAIまたはDBエラーになります。
+
+### V2 DDLの確認・適用
+
+`sql/ai/040_create_ai_v2_tables.sql`は使い捨てPostgreSQL 16で新規作成・再実行・定義不一致時の停止を確認済みです。利用者報告ではNeonの`production` / `neondb`へDDLを適用し、定義照合も成功しています（CodexによるNeonへの接続・再照合ではありません）。今後別のDBへ適用する場合は、Neon Consoleで対象Project・branch・databaseを確認し、`information_schema`、`pg_get_constraintdef`、`pg_get_indexdef`、`pg_index`、`pg_get_expr`等でcolumns、identity/default、constraints、PK/FK、indexesを照合してください。同名オブジェクトの不一致時は停止し、既存テーブルを変更・削除しないでください。
+
+DDL適用後の手動確認は、ローカル限定設定でV2画面から新規会話を作成し、質問を1回送信、HTTP 201と会話一覧/履歴を確認します。その後Neonでconversation id/titleと対応するturnのprompt/responseを読み取り、画面再読込後に一覧から同じ会話を再選択して再表示されることを確認します。Gemini実呼出しはAPI料金、Neon保存は永続変更を伴うため、対象と回数を確認したうえで利用者が実行してください。この作業では実Gemini/Neon結合を再試験していません。
+
+#### 利用者によるローカル手動確認
+
+利用者報告によるローカル手動確認では、`/ai/v2/`画面、会話作成、Gemini回答生成、過去会話を踏まえた追加質問、会話間の文脈分離、再読み込み後の再開、Neonへの保存、DDL定義照合、および一覧GET 200・作成POST 201・履歴GET 200・質問POST 201が成功しています。対象Neonは`production` / `neondb`との報告です。これは利用者の手動確認であり、自動テストや使い捨てPostgreSQL試験とは別の証跡で、Codexは再実施していません。Vercel Preview/ProductionでのV2 API動作、Vercel設定、DB rollbackは未確認です。詳細は[`docs/ai/v2/test-results.md`](docs/ai/v2/test-results.md)と[`sql/README.md`](sql/README.md)を参照してください。
+
+V2の自動検証: `pnpm lint`、`pnpm typecheck`、`pnpm format:check`、`pnpm test`、`pnpm build`、`pnpm exec playwright test tests/e2e/ai-v2.spec.ts`。PlaywrightはAPIをroute mockし、実Gemini/Neonへ通信しません。
+
 ### Production運用
 
 Productionでは`VERCEL_ENV=production`により、`AI_DEMO_ENABLED=true`でも`POST /api/ai/ask`と`GET /api/ai/history`を503 `DEMO_DISABLED`で停止します。これはAI API単位の制御で、TODO V1/V2は独立しています。TASK-08ではSupertestでこの分岐を確認し、Productionデプロイの匿名GETはVercel SSOへリダイレクトされたため、アプリのProduction応答自体は確認できていません。ProductionへPOSTは行いません。
@@ -77,5 +97,5 @@ Productionでは`VERCEL_ENV=production`により、`AI_DEMO_ENABLED=true`でも`
 
 - 履歴の保存期間と削除運用は未決定です。
 - `ai_qa_logs`の実Neon DDLは未確認・未適用です。既存CHECK制約、PK列、index列順/方向、`created_at` defaultをcatalog関数で照合するレビューが必要です。
-- 実Gemini通信、実Neonの保存・履歴取得、実DBを使うE2Eは未確認です。
+- V2のローカル実Gemini・Neon保存/履歴再開は利用者報告で成功していますが、Codexは再実施していません。Vercel Preview/ProductionでのV2動作、実DB rollback、実DBを使うTODO E2Eは未確認です。
 - VercelのNode.js runtime、Fluid Compute、実効Function上限、環境変数scope、Dashboardの保護例外は未確認です。Previewアクセス保護が設定画面でも確認できるまでAIを有効化しないでください。
