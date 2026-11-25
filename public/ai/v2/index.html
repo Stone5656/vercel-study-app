@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI会話アプリ V2</title>
+    <link rel="stylesheet" href="/ai/v2/style.css" />
+    <script type="module" src="/ai/v2/app.js"></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Conversation demo</p>
+          <h1>AI会話アプリ V2</h1>
+          <p class="lead">
+            話題ごとに会話を分けて、保存済みの履歴を確認できます。
+          </p>
+        </div>
+        <nav aria-label="関連ページ">
+          <a href="/">TOPへ戻る</a>
+          <a href="/ai/">AI質問アプリ V1</a>
+        </nav>
+      </header>
+
+      <div class="workspace">
+        <aside
+          class="conversation-panel"
+          aria-labelledby="conversation-heading"
+        >
+          <h2 id="conversation-heading">会話</h2>
+          <form id="conversation-form">
+            <label for="conversation-title">新しい会話名</label>
+            <input
+              id="conversation-title"
+              name="title"
+              type="text"
+              maxlength="50"
+              autocomplete="off"
+              placeholder="例：旅行の計画"
+              required
+            />
+            <button id="create-conversation" type="submit">会話を作成</button>
+          </form>
+          <p
+            id="conversation-status"
+            class="status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <ul
+            id="conversation-list"
+            class="conversation-list"
+            aria-label="保存済み会話"
+          ></ul>
+        </aside>
+
+        <section class="detail-panel" aria-labelledby="selected-title">
+          <div class="detail-header">
+            <div>
+              <p class="eyebrow">選択中の会話</p>
+              <h2 id="selected-title">会話を選択してください</h2>
+            </div>
+            <time id="selected-updated-at"></time>
+          </div>
+
+          <div id="turns-content" aria-busy="false">
+            <p
+              id="turns-status"
+              class="status"
+              role="status"
+              aria-live="polite"
+            >
+              会話を選択してください。
+            </p>
+            <ol id="turn-list" class="turn-list" aria-label="会話履歴"></ol>
+          </div>
+
+          <form
+            id="question-form"
+            class="question-form"
+            aria-describedby="question-help"
+          >
+            <label for="question-prompt">追加質問</label>
+            <textarea
+              id="question-prompt"
+              name="prompt"
+              rows="3"
+              disabled
+            ></textarea>
+            <p id="question-help" class="muted">
+              追加質問の送信は次の実装タスクで有効になります。
+            </p>
+            <button type="submit" disabled>質問を送信</button>
+          </form>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

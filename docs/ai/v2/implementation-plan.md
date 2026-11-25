@@ -86,6 +86,8 @@
 - **実装**: V2 static page、create form、conversation list/select、turn history rendering、reload後list再取得から会話再選択、loading/empty/error/disabled状態。
 - **試験**: Playwright `page.route()`でAPI mock。会話2件切替、保存history再取得、0件、HTTP/JSON異常、遅延した旧history応答の破棄、POST中の選択/新規作成ロック、HTML風title/historyがtext描画であること。
 - **完了条件**: V2 pageで一覧と各履歴が別表示、reload後に選択再開、V1画面/TOP導線無影響。
+- **実測結果**: 2026-11-25、Chromium Playwright 7/7成功。会話作成/選択/切替、履歴分離、loading/empty、旧GET応答破棄、XSS風文字列の安全描画、質問フォームが未送信・無効であることを確認。
+- **状態**: 完了。reload後はroute mockで一覧再取得を確認し、実DBからの永続データ再開は未実施。追加質問UIはTASK-V2-07。
 
 ### TASK-V2-07：追加質問UIと送信状態
 

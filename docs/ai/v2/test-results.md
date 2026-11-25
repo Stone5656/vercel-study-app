@@ -46,6 +46,12 @@
 - HTTP/Service tests 10/10成功。trim/Unicode 2,000境界、AI失敗/空回答時の保存0、DB障害503、context競合409、conversation不在、DB保存Promise完了前に201が返らないことを確認。
 - 実Gemini API通信・API key実機確認・Neonへの保存は未実施。
 
+## TASK-V2-06 会話管理UI（2026-11-25）
+
+- `pnpm exec playwright test tests/e2e/ai-v2.spec.ts --output=/tmp/ai-v2-task06-results`: Chromium 7/7成功。
+- route mockで会話一覧/新規作成/選択切替/各会話履歴の分離、loading/empty、遅れて到着した古い履歴応答の破棄、固定された公開停止案内、XSS風タイトル/質問/回答のプレーンテキスト表示、未実装質問フォームのdisabled/non-submitを確認。
+- 実Neon/Gemini/Vercel環境は未確認。
+
 TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共有`requirePool()`、V1 AI router、TODO V1/V2が存在し、V2コード/DDLはなかった。既存実機Neon/Gemini、Vercel Dashboard、実DB TODO E2Eは未確認。
 
 ## 要件別試験状況
@@ -58,9 +64,9 @@ TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共�
 | REQ-V2-004 最新5往復のGemini文脈 | 一部実施 | SDK boundary mockで最新5・同一context/current question確認   |
 | REQ-V2-005 入力/16KiB            | 一部実施 | title/parserに加え質問trim/Unicode境界をAPI mock確認         |
 | REQ-V2-006 AI→DB commit→201/競合 | 一部実施 | API/Model mockでcommit待機、AI/DB失敗、context競合を確認     |
-| REQ-V2-007 UI状態                | 未実施   | TASK-V2-06/07以降で記録                                      |
+| REQ-V2-007 UI状態                | 一部実施 | UI route mockで会話作成/選択/履歴状態、raceを確認            |
 | REQ-V2-008 V2 DB分離             | 一部実施 | V2専用DDLとModel SQL/transaction mock確認。Neon未適用        |
-| REQ-V2-009 XSS/秘密              | 未実施   | TASK-V2-06/07/08以降で記録                                   |
+| REQ-V2-009 XSS/秘密              | 一部実施 | UI mockでtitle/question/responseのtext描画・要素未生成確認   |
 | REQ-V2-010 公開停止/回帰         | 一部実施 | ガード条件とModel呼出0をSupertest確認。V1/TODO回帰は最終TASK |
 | REQ-V2-011 固定エラー契約        | 一部実施 | 作成/一覧/履歴APIの入力/parser/DB/404をSupertest確認         |
 
