@@ -43,6 +43,34 @@
 
 T01〜T15、T17、T19、T20の「合格」は記載した自動テスト/モック/静的確認の範囲に限る。実Neon検証済みを意味しない。実DB・実Geminiの項目は本タスクでも未実施。
 
+## V1最終統合確認の利用者報告（2026-11-25）
+
+| 区分                         | 結果                                 | 根拠と範囲                                                                                                          |
+| ---------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| 利用者によるローカル手動確認 | 利用者報告では完了                   | 実Gemini API接続、Express経由の回答取得、Neonを利用したAI質問アプリの動作確認。このセッションでは再実施していない。 |
+| 自動サーバーテスト           | TASK-08時点70/70成功。今回改めて実行 | Supertest/fake Service・Modelを含む。実Gemini/Neon試験とは別。                                                      |
+| 自動ブラウザテスト           | TASK-08時点37/37成功。今回改めて実行 | Playwright route mock。実Gemini/Neonを呼ばない。                                                                    |
+| Vercel実環境                 | 未確認                               | Node runtime、Function duration、Preview protection設定値、Production API応答は未確認。                             |
+| Neon catalog定義照合         | 未確認                               | DDL検証の修正は静的レビューのみ。実DBのCHECK/PK/index/defaultはこのセッションで照合していない。                     |
+| 実DB依存TODO E2E             | 未実施                               | AI質問機能のローカル動作報告とは別の回帰範囲。                                                                      |
+
+手動確認報告には実行日時、質問内容、HTTP status、対象Neon branch/database、catalog照合結果の証跡が含まれていない。推測で補完せず、上記以上の受入条件を合格扱いしない。
+
+### 自動検証の再実行（2026-11-25、作業ワークスペース）
+
+| コマンド                                                                                                                         | 実測結果                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `pnpm lint`                                                                                                                      | 成功                                                                                                          |
+| `pnpm typecheck`                                                                                                                 | 成功                                                                                                          |
+| `pnpm format:check`                                                                                                              | 成功                                                                                                          |
+| `pnpm test`                                                                                                                      | 70/70成功、9 suites、失敗0、skip 0                                                                            |
+| `pnpm build`                                                                                                                     | 成功                                                                                                          |
+| `git diff --check`                                                                                                               | 成功                                                                                                          |
+| `pnpm exec playwright test tests/e2e/ai-history.spec.ts tests/e2e/ai-ask.spec.ts --output=/tmp/vercel-study-ai-v1-final-results` | Chromium 37/37成功、失敗0。APIは`page.route()`等でモックし、実Gemini/Neon通信なし                             |
+| `sql/ai/030_create_ai_qa_logs.sql`を使い捨てPostgreSQL 16で実行                                                                  | 新規作成・再実行成功。CHECK式・PK列・ASC index・`now()` defaultの不一致時に停止。テスト後コンテナを停止・破棄 |
+
+これらはローカル自動検証結果であり、PR head上のCIや本番/Preview実機検証とは区別する。DDLの試験は使い捨てPostgreSQL 16に限られ、Neon上での実行・catalog照合はしていない。
+
 ## TASK-08 Preview/運用確認（2026-11-18）
 
 ### Vercel/GitHub読み取り確認

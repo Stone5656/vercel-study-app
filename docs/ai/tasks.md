@@ -95,3 +95,10 @@
 - 期待結果: 観測した事実と未確認項目を分離し、Preview AIの有効化条件を明確化
 - 実測結果: Previewの`/`, `/ai/`, `/api/ai/history`とProduction deploymentの`/api/ai/history`は匿名GET時に302でVercel SSOへredirect。PR #8 merged、Production deployment SHA `79e696c…`、Preview deployment SHA `9b6a1ca…`。Supertestの実測は下記`test-results.md`に追記
 - 未検証: Dashboard上の接続repository詳細、Node.js runtime、Fluid Compute、実効`maxDuration`、環境変数scope、protection exception、canonical URL、実Gemini/Neon/DB E2E、履歴削除/保存期間
+
+### TASK-08 V1最終確認の追記（2026-11-25）
+
+- 利用者からローカル実Gemini接続・Express経由の回答取得・Neonを使ったAI質問アプリの動作確認完了との報告を受領した。手動確認の利用者報告として記録し、自動テストやVercel確認とは区別する。
+- TASK-08時点の自動検証をこの作業セッションで再実行: lint、typecheck、format check、70/70 server tests、build、diff check、37/37 AI Playwright testsが成功。
+- `030_create_ai_qa_logs.sql`へ制約式、PK列、indexキー順序/DESC、`created_at` defaultのcatalog照合と不一致時停止を追加。使い捨てPostgreSQL 16で新規作成・再実行とCHECK/PK/index/default不一致時の停止を確認した。Neonへは実行していない。
+- 未確認: 実Neonのcatalog定義がDDLと一致すること、Vercel Dashboard設定とProduction API応答、実DB依存TODO E2E。詳細は`test-results.md`。

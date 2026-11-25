@@ -53,10 +53,11 @@ TASK-08で実行するlint、typecheck、format check、Node test runner、build
 - Vercel Dashboardのruntime Node version、Fluid Compute、実効Function maxDuration
 - Vercel環境変数の登録有無とPreview/Production scope
 - Deployment Protection exceptionsとcanonical Preview URL
-- 実Geminiリクエスト
-- Neon DDL適用、INSERT、SELECTによる永続化
+- Neon上のCHECK/PK/index/default定義のcatalog完全照合
 - 実DB依存のTODO E2E
 - 履歴保存期間と削除運用
+
+2026-11-25、利用者からローカルで実Gemini接続、Express経由の回答取得、Neonを使ったアプリ動作確認を完了したとの報告を受けた。これは利用者による手動確認であり、自動テストとは区別する。このセッションでは実Gemini/Neonを再実施していない。
 
 TASK-08で匿名GETしたPreview deployment URLの`/`、`/ai/`、`/api/ai/history`はいずれもSSOへredirectした。これは該当デプロイ/URL/pathでの確認であり、Vercel Dashboard全設定やcanonical aliasの証明ではない。Production deploymentの履歴GETもSSO redirectのため、アプリの停止レスポンス自体は実環境で未確認。
 
@@ -65,7 +66,7 @@ TASK-08で匿名GETしたPreview deployment URLの`/`、`/ai/`、`/api/ai/histor
 1. Vercel DashboardでProject/repository接続、Node runtime、Fluid Compute、実効duration、Environment Variable scope、Protection scope/exceptionsを確認する。
 2. Previewの全利用URLとAPI routeが第三者から保護されていることを確認する。未確認の間はAIを有効化しない。
 3. Neonの対象branch/databaseを確認し、catalog定義照合と差分停止条件を含むDDLをレビュー・承認してから適用する。
-4. 少数の手動実Gemini質問、Neon保存、履歴再取得を実施する。
+4. 既に報告されたローカル手動確認について、可能なら実行日時・対象DBの識別・API/保存結果の証跡を機密値を含めず整理する。
 5. 履歴保持期間/削除運用を決め、DB E2EとPreview結合試験を別途記録する。
 
 ## 10. 実環境識別記録

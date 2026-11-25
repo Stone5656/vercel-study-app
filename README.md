@@ -52,12 +52,14 @@ Preview と Production は別々の Vercel デプロイ環境で、環境変数�
 
 必要な環境変数名は`AI_DEMO_ENABLED`、`AI_MOCK_ENABLED`、`GEMINI_API_KEY`、`GEMINI_MODEL`、`DATABASE_URL`です。値をGitやブラウザへ含めないでください。
 
-- ローカル模擬回答: `AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=true`を設定し、`VERCEL_ENV`は設定しないでください。`AI_MOCK_ENABLED=true`が模擬するのはGeminiへの通信だけです。質問・回答の保存には引き続き`DATABASE_URL`、接続可能なNeon PostgreSQL、`ai_qa_logs`テーブルとINSERT権限が必要です。DB未設定またはDDL未適用の場合、質問送信は保存成功（HTTP 201）になりません。現在DDLは既存制約・index定義の照合が未解決のため、レビュー・承認前に実DBへ適用しないでください。
+- ローカル模擬回答: `AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=true`を設定し、`VERCEL_ENV`は設定しないでください。`AI_MOCK_ENABLED=true`が模擬するのはGeminiへの通信だけです。質問・回答の保存には引き続き`DATABASE_URL`、接続可能なNeon PostgreSQL、`ai_qa_logs`テーブルとINSERT権限が必要です。DB未設定またはDDL未適用の場合、質問送信は保存成功（HTTP 201）になりません。DDLにはCHECK式、PK列、indexの定義、`created_at` defaultの不一致を検出するcatalog照合を追加しました。実Neon上の定義がこのDDLと一致することは、この作業では再照合していません。レビュー・承認前にDDLを実DBへ適用しないでください。
 - ローカルGemini: `AI_DEMO_ENABLED=true`、`AI_MOCK_ENABLED=false`、`GEMINI_API_KEY`、`GEMINI_MODEL=gemini-3.5-flash-lite`、`DATABASE_URL`を設定してください。実リクエストはAPI利用料・DB書き込みを伴います。承認済みDDLの適用後に、手動で少数回だけ実施してください。
 
 設定後に`pnpm dev`を起動します。自動検証は`pnpm lint`、`pnpm typecheck`、`pnpm format:check`、`pnpm test`、`pnpm build`と、AI UIのPlaywrightテストで行います（下のコマンド一覧を参照）。
 
 Gemini設定がない状態でもアプリと既存TODOは起動しますが、AI APIは安全なエラーを返します。ProductionではAI APIは常に停止します。実Neon保存の確認には、承認済みのAI履歴DDLを対象DBへ適用済みである必要があります。
+
+2026-11-25、利用者から「ローカルで実Gemini APIに接続し、Express経由で回答を取得し、Neonを使ったAI質問アプリの動作確認を完了した」と報告を受けました。これは利用者による手動確認であり、自動テストやVercel環境の検証とは区別します。このセッションでは実Gemini/Neon接続を再実施していません。確認内容と未確認事項は[`docs/ai/test-results.md`](docs/ai/test-results.md)を参照してください。
 
 ### Vercel Preview運用
 

@@ -83,9 +83,11 @@ SQL先頭の確認queryでcolumns、constraints、indexesを表示する。同�
 - 模擬Serviceは固定文`接続確認用の模擬回答`を返す。Routerでは`AI_DEMO_ENABLED=true`に加えて`AI_MOCK_ENABLED=true`かつ`VERCEL_ENV`未設定の場合だけ有効。Preview/Productionは模擬回答経路を使用できず、`AI_UNAVAILABLE`を返す。
 - Router factoryは公開ガード・履歴Model注入を保ち、模擬回答Serviceとsave関数も差し替え可能。
 
-### SQLレビュー未解決事項
+### SQLレビュー指摘とTASK-08対応
 
-`030_create_ai_qa_logs.sql`は同名制約・indexの存在と一部の制約名を確認するが、既存制約式の意味や既存indexのキー列・順序・ASC/DESCまで完全一致を検証していない。`IF NOT EXISTS`は同名オブジェクトの定義を照合しない。レビュー指摘として未解決であり、実Neon適用前に照合SQL/停止条件を修正・承認する必要がある。TASK-03ではこのDDLを変更・実行していない。
+当初の`sql/ai/030_create_ai_qa_logs.sql`は制約の存在確認が中心で、式、PK列、indexのキー/順序/DESC、`created_at` defaultの完全照合が不足していた。TASK-08で`pg_get_constraintdef`、`pg_index`/`indkey`/`indoption`、`pg_get_indexdef`、`pg_get_expr`による事前表示と適用時検証を追加した。`IF NOT EXISTS`の同名indexが別定義なら後続検証で例外停止する。
+
+修正SQLは使い捨てのPostgreSQL 16コンテナで初回作成と再実行を確認し、CHECK式・PK列・ASC index・`now()` defaultへ意図的に差し替えた場合に停止することも確認した。Neonへは実行していない。利用者からローカルNeonを使ったAI質問アプリ動作確認完了の報告はあるが、対象DB上のcatalog定義が修正後DDLと一致するかは再照合していない。DDLのコード上の不足は修正済み、実環境との定義一致は未確認として管理する。
 
 ## 5. Gemini SDK設計
 
@@ -189,3 +191,7 @@ DashboardではProject `vercel-study-app`の**Settings > Deployment Protection**
 Production停止はSupertestで確認済みだが、Production deployment URLのアプリ応答はSSO保護により未確認。Previewの確認したdeployment URL/pathは匿名利用を防いでいたが、Dashboardの例外設定とcanonical URLは未確認のためPreviewでAIを有効化してよい状態とは判定しない。実Gemini、実Neon、実DB E2E、Vercel Function/runtime/環境変数設定は未検証。
 
 Vercel公式資料: [Node.js versions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions)、[Function limits](https://vercel.com/docs/functions/limitations)、[Fluid Compute](https://vercel.com/docs/fluid-compute)、[Deployment Protection](https://vercel.com/docs/deployment-protection)、[Environment Variables](https://vercel.com/docs/environment-variables)。公式資料は利用可能な設定方法・一般仕様を示すもので、対象Projectの実設定を証明しない。
+
+## 9. V1最終ローカル手動確認（2026-11-25）
+
+利用者から、実Gemini API接続、Express経由の回答取得、Neonを利用したAI質問アプリのローカル動作確認を完了したとの報告を受けた。これは利用者による手動確認として記録し、自動テストやVercel実環境確認とは区別する。このセッションでは実Gemini/Neonへ接続していないため、リクエスト詳細、実DB catalog定義、Preview/Productionの動作は独立に確認していない。テスト区分と記録は[`test-results.md`](test-results.md)を参照。
