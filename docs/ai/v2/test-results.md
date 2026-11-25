@@ -40,6 +40,12 @@
 - 有効な会話の履歴をModel順で返却し、空履歴200と存在しない会話404を区別。Modelの固定DB障害503と想定外500を確認。
 - 最新20ターン/同時刻ID tie-break/古い順DTOはTASK-V2-02 Model SQL/mockで確認済み。Neonは未実施。
 
+## TASK-V2-05 直近5往復Gemini質問API（2026-11-25）
+
+- Gemini SDK境界をfake clientでmock。直近5ターンは古い順のuser/model roleで送り、current promptを末尾のuserとして追加。6件目以前の履歴は送らず、model、max tokens 1024、30秒HTTP timeout、retry attempts 1、automaticContinuation false、automaticFunctionCalling disabledを検証。
+- HTTP/Service tests 10/10成功。trim/Unicode 2,000境界、AI失敗/空回答時の保存0、DB障害503、context競合409、conversation不在、DB保存Promise完了前に201が返らないことを確認。
+- 実Gemini API通信・API key実機確認・Neonへの保存は未実施。
+
 TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共有`requirePool()`、V1 AI router、TODO V1/V2が存在し、V2コード/DDLはなかった。既存実機Neon/Gemini、Vercel Dashboard、実DB TODO E2Eは未確認。
 
 ## 要件別試験状況
@@ -49,9 +55,9 @@ TASK-V2-01のbaseline時点ではExpress 5/TypeScript ESM、`src/app.ts`、共�
 | REQ-V2-001 会話作成              | 一部実施 | Model/API mockでINSERT/DTO、入力境界確認。Neon未確認         |
 | REQ-V2-002 一覧/再開             | 一部実施 | 一覧SQL/API mock確認。選択UIはTASK-V2-06                     |
 | REQ-V2-003 履歴保存/最新20       | 一部実施 | Model最新20/順序と履歴API/404をmock確認。UI/Neon未確認       |
-| REQ-V2-004 最新5往復のGemini文脈 | 未実施   | TASK-V2-05以降で記録                                         |
-| REQ-V2-005 入力/16KiB            | 未実施   | TASK-V2-03/05/07以降で記録                                   |
-| REQ-V2-006 AI→DB commit→201/競合 | 未実施   | TASK-V2-05/07以降で記録                                      |
+| REQ-V2-004 最新5往復のGemini文脈 | 一部実施 | SDK boundary mockで最新5・同一context/current question確認   |
+| REQ-V2-005 入力/16KiB            | 一部実施 | title/parserに加え質問trim/Unicode境界をAPI mock確認         |
+| REQ-V2-006 AI→DB commit→201/競合 | 一部実施 | API/Model mockでcommit待機、AI/DB失敗、context競合を確認     |
 | REQ-V2-007 UI状態                | 未実施   | TASK-V2-06/07以降で記録                                      |
 | REQ-V2-008 V2 DB分離             | 一部実施 | V2専用DDLとModel SQL/transaction mock確認。Neon未適用        |
 | REQ-V2-009 XSS/秘密              | 未実施   | TASK-V2-06/07/08以降で記録                                   |

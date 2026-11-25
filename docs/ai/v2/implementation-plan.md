@@ -75,6 +75,8 @@
 - **実装**: prompt/ID validation、same conversation newest5 retrieval/reversal、current prompt append、`models.generateContent`、empty answer handling、AI後のDB transaction保存、保存完了後201。V1 Serviceを変更せず独立注入。
 - **試験**: SDK境界mockでrole/order/contents/model/timeout/retryを確認。6+ historyでも5組のみ、他会話/V1を含まない。AI失敗/空回答でinsert0、DB rollbackで201なし、deferred transaction完了前はHTTP response未完了。同一会話のcontext version競合で409かつ保存0を確認。Neon/Gemini実通信なし。
 - **完了条件**: AI成功かつDB commit後のみ201、service/DB失敗の安全なstatus、過去文脈の隔離を自動確認。
+- **実測結果**: 2026-11-25、Service/HTTPテスト10/10成功。SDK mockでmodel/role/最新5 turn/current prompt/token/timeout/retry/continuationを確認。APIでAI失敗/空回答の保存0、DB/競合error、save promise完了前に未応答を確認。実Gemini/Neon通信なし。
+- **状態**: 完了。実APIキー・Gemini quota、実Neon transactionは未確認。
 
 ### TASK-V2-06：会話作成・一覧・選択UI
 
